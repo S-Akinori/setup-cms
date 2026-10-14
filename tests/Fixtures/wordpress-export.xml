@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:wp="http://wordpress.org/export/1.2/">
+  <channel>
+    <title>移行元ブログ</title>
+    <wp:wxr_version>1.2</wp:wxr_version>
+    <wp:base_site_url>https://old.example.com</wp:base_site_url>
+    <item>
+      <title>最初の記事</title>
+      <content:encoded><![CDATA[<!-- wp:heading --><h2>見出し</h2><!-- /wp:heading --><p>これは <strong>本文</strong> です。</p><script>alert(1)</script><ul><li>項目1</li><li>項目2</li></ul>]]></content:encoded>
+      <excerpt:encoded><![CDATA[記事の抜粋です。]]></excerpt:encoded>
+      <wp:post_id>10</wp:post_id>
+      <wp:post_date_gmt>2024-05-01 03:00:00</wp:post_date_gmt>
+      <wp:post_name>first-post</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <category domain="category" nicename="news"><![CDATA[ニュース]]></category>
+      <category domain="post_tag" nicename="wordpress"><![CDATA[WordPress]]></category>
+      <wp:postmeta>
+        <wp:meta_key>_yoast_wpseo_metadesc</wp:meta_key>
+        <wp:meta_value>検索用の説明</wp:meta_value>
+      </wp:postmeta>
+    </item>
+    <item>
+      <title>固定ページ</title>
+      <content:encoded><![CDATA[<p>対象外</p>]]></content:encoded>
+      <wp:post_id>11</wp:post_id>
+      <wp:post_name>about</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>page</wp:post_type>
+    </item>
+  </channel>
+</rss>
