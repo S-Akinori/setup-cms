@@ -45,6 +45,7 @@ SetUp CMSは、Laravelで動作する小規模なヘッドレスCMSです。記�
 
 - PHP 8.3以上（XServerではPHP 8.4を推奨）
 - MySQLまたはMariaDB（ローカル開発だけSQLiteも利用可能）
+- Git（XServerへのclone・更新に使用）
 - Composer 2
 - Node.js 20以上（フロントアセットのビルド時のみ）
 - PHP拡張: Ctype、cURL、DOM、Fileinfo、Filter、GD、Hash、Mbstring、OpenSSL、PCRE、PDO、Session、Tokenizer、XML、XMLReader
@@ -119,7 +120,7 @@ Laravel本体と`.env`は公開しません。XServerの`public_html`には、La
 
 ```text
 /home/サーバーID/
-├─ mycms/                                      # Laravel本体・非公開
+├─ setup-cms/                                  # Gitで管理するLaravel本体・非公開
 │  ├─ app/  bootstrap/  config/  storage/  vendor/
 │  ├─ .env
 │  └─ artisan
@@ -128,7 +129,7 @@ Laravel本体と`.env`は公開しません。XServerの`public_html`には、La
    ├─ .htaccess
    ├─ .user.ini
    ├─ build/
-   └─ storage -> /home/サーバーID/mycms/storage/app/public
+   └─ storage -> /home/サーバーID/setup-cms/storage/app/public
 ```
 
 次の値は自分の契約内容へ置き換えてください。
@@ -180,9 +181,11 @@ PHP_BIN=/usr/bin/php8.4
 
 名前には通常`サーバーID_`が付きます。`DB_HOST`へ`localhost`を決め打ちせず、「MySQL情報」のホスト名を設定してください。詳しくは[XServer公式のMySQL設定](https://www.xserver.ne.jp/manual/man_db_setting.php)を参照してください。
 
-### 4. 公開用ファイルを準備する
+### 4. GitHubと公開用ファイルを準備する
 
-XServerでNode.jsを使わなくてよいよう、ローカルでビルドとテストを済ませます。
+XServerではGitHubの`main`ブランチからコードを取得します。変更をXServer上で直接編集せず、ローカルで修正・テスト・pushしたものを`git pull`で反映する運用にします。
+
+デプロイ前にローカルでビルドとテストを済ませます。
 
 ```powershell
 cd C:\Users\aknr1\MyApps\MyCMS
@@ -193,14 +196,61 @@ php artisan test
 
 `public/build`が生成されていることを確認します。
 
-### 5. ファイルをアップロードする
+`public/build`、`.env`、`vendor`、`node_modules`、SQLite実データはGitの管理対象外です。ソースコードはGit、フロントアセットはビルド後にSCP/SFTP、秘密情報はXServer上の`.env`で管理します。
 
-FTP/SFTPまたは`scp`でプロジェクトを`/home/サーバーID/mycms`へアップロードします。`.env`、`node_modules`、`.git`、ローカル用SQLiteはアップロードしません。
+### 5. GitHubからcloneする
 
-サーバーでComposerを利用できる場合：
+公開リポジトリの場合は、XServerへSSH接続して次を実行します。
 
 ```bash
-cd /home/サーバーID/mycms
+cd /home/サーバーID
+git --version
+git clone --branch main --single-branch \
+  https://github.com/S-Akinori/setup-cms.git setup-cms
+cd /home/サーバーID/setup-cms
+git config pull.ff only
+git remote -v
+git status
+```
+
+`git --version`が実行できない場合はXServerのサーバー情報を確認し、利用中サーバーでGitコマンドが使えるかXServerサポートへ確認してください。
+
+#### 非公開リポジトリに変更する場合
+
+GitHub用の読み取り専用Deploy Keyを使います。XServerへログインするためのSSH鍵とは別の鍵です。Deploy Keyは1つのリポジトリだけへアクセスさせられ、既定では読み取り専用です。詳細は[GitHub公式のDeploy Key管理](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)を参照してください。
+
+```bash
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+ssh-keygen -t ed25519 -f ~/.ssh/setup_cms_github -C "setup-cms-xserver"
+cat ~/.ssh/setup_cms_github.pub
+```
+
+表示された公開鍵をGitHubリポジトリの「Settings → Deploy keys」へ登録します。書き込み権限は付けません。`~/.ssh/config`へ次を追加します。
+
+```sshconfig
+Host github-setup-cms
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/setup_cms_github
+    IdentitiesOnly yes
+```
+
+```bash
+chmod 600 ~/.ssh/config ~/.ssh/setup_cms_github
+ssh -T git@github-setup-cms
+git clone --branch main --single-branch \
+  git@github-setup-cms:S-Akinori/setup-cms.git setup-cms
+```
+
+秘密鍵、Personal Access Token、`.env`をリポジトリへコミットしないでください。
+
+### 6. Composerとビルド済みアセットを配置する
+
+cloneしたディレクトリで本番用PHP依存関係をインストールします。
+
+```bash
+cd /home/サーバーID/setup-cms
 composer install --no-dev --optimize-autoloader
 ```
 
@@ -213,16 +263,24 @@ $PHP_BIN $(command -v composer) install --no-dev --optimize-autoloader
 
 Composerを使えない場合は、ローカルの別コピーで同じコマンドを実行し、生成された`vendor`もアップロードします。
 
+Git管理外の`public/build`は、ローカルのPowerShellからXServerへ転送します。
+
+```powershell
+scp -P 10022 -i C:\path\to\xserver_private_key -r `
+  C:\Users\aknr1\MyApps\MyCMS\public\build `
+  サーバーID@サーバーID.xsrv.jp:/home/サーバーID/setup-cms/public/
+```
+
 Laravelの`public`の中身だけを公開先へコピーします。
 
 ```bash
-cp -a /home/サーバーID/mycms/public/. \
+cp -a /home/サーバーID/setup-cms/public/. \
   /home/サーバーID/example.com/public_html/cms.example.com/
 ```
 
 XServerの初期`index.html`や`default_page.html`がある場合は、必要性を確認して公開先から取り除きます。`index.html`が残ると`index.php`より優先表示されます。
 
-### 6. 公開側のindex.phpを変更する
+### 7. 公開側のindex.phpを変更する
 
 公開先の`index.php`を次の内容にし、`サーバーID`を実値へ置き換えます。
 
@@ -234,7 +292,7 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-$applicationPath = '/home/サーバーID/mycms';
+$applicationPath = '/home/サーバーID/setup-cms';
 
 if (file_exists($maintenance = $applicationPath.'/storage/framework/maintenance.php')) {
     require $maintenance;
@@ -250,9 +308,9 @@ $app->handleRequest(Request::capture());
 
 `.htaccess`と`.user.ini`も公開先にあることを確認します。Laravel本体側の`public/index.php`は変更不要です。
 
-### 7. 本番用.envを作る
+### 8. 本番用.envを作る
 
-`/home/サーバーID/mycms/.env`を作成します。
+`/home/サーバーID/setup-cms/.env`を作成します。
 
 ```dotenv
 APP_NAME="SetUp CMS"
@@ -271,8 +329,8 @@ LOG_LEVEL=warning
 DB_CONNECTION=mysql
 DB_HOST=MYSQLホスト名
 DB_PORT=3306
-DB_DATABASE=サーバーID_mycms
-DB_USERNAME=サーバーID_mycmsuser
+DB_DATABASE=サーバーID_setupcms
+DB_USERNAME=サーバーID_setupcmsuser
 DB_PASSWORD=十分に長いランダムなパスワード
 
 SESSION_DRIVER=database
@@ -293,13 +351,13 @@ FRONTEND_BUILD_WEBHOOK_TOKEN=
 `.env`は`public_html`へ置かず、権限を制限します。
 
 ```bash
-chmod 600 /home/サーバーID/mycms/.env
+chmod 600 /home/サーバーID/setup-cms/.env
 ```
 
-### 8. Laravelを初期化する
+### 9. Laravelを初期化する
 
 ```bash
-cd /home/サーバーID/mycms
+cd /home/サーバーID/setup-cms
 PHP_BIN=/usr/bin/php8.4
 
 $PHP_BIN artisan key:generate
@@ -311,18 +369,18 @@ chmod -R 755 storage bootstrap/cache
 
 Laravelは`storage`と`bootstrap/cache`へ書き込む必要があります。`777`は使用しません。
 
-### 9. 画像公開用リンクを作る
+### 10. 画像公開用リンクを作る
 
 公開ディレクトリがLaravel本体と分かれているため、`php artisan storage:link`ではなく公開先へ直接リンクします。
 
 ```bash
-ln -s /home/サーバーID/mycms/storage/app/public \
+ln -s /home/サーバーID/setup-cms/storage/app/public \
   /home/サーバーID/example.com/public_html/cms.example.com/storage
 ```
 
 すでに`storage`がある場合は、削除前に中身とリンク先を確認してください。
 
-### 10. 画像上限とCronを設定する
+### 11. 画像上限とCronを設定する
 
 `public/.user.ini`には次が設定済みです。
 
@@ -336,12 +394,12 @@ post_max_size = 12M
 予約公開のため「Cron設定」に毎分実行を追加します。
 
 ```cron
-* * * * * cd /home/サーバーID/mycms && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
+* * * * * cd /home/サーバーID/setup-cms && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
 ```
 
 PHPパスは「コマンドパス一覧」で確認してください。詳しくは[XServer公式のCron設定](https://www.xserver.ne.jp/manual/man_program_cron.php)を参照してください。Laravel側では予約公開を5分間隔で判定します。
 
-### 11. 公開確認
+### 12. 公開確認
 
 ```bash
 curl -I https://cms.example.com/up
@@ -394,7 +452,7 @@ WXRと画像バックアップを`public_html`へ置かないでください。
 ### 3. dry-runで確認する
 
 ```bash
-cd /home/サーバーID/mycms
+cd /home/サーバーID/setup-cms
 PHP_BIN=/usr/bin/php8.4
 
 $PHP_BIN artisan cms:import-wordpress \
@@ -513,7 +571,7 @@ export default defineConfig({
 ログ確認：
 
 ```bash
-tail -n 200 /home/サーバーID/mycms/storage/logs/laravel.log
+tail -n 200 /home/サーバーID/setup-cms/storage/logs/laravel.log
 ```
 
 ## 更新・バックアップ・復元
@@ -529,21 +587,26 @@ tail -n 200 /home/サーバーID/mycms/storage/logs/laravel.log
 
 ```bash
 mysqldump -h MYSQLホスト名 -u DBユーザー名 -p DB名 \
-  > /home/サーバーID/backup/mycms-$(date +%Y%m%d).sql
+  > /home/サーバーID/backup/setup-cms-$(date +%Y%m%d).sql
 
-tar -czf /home/サーバーID/backup/mycms-media-$(date +%Y%m%d).tar.gz \
-  -C /home/サーバーID/mycms/storage/app public
+tar -czf /home/サーバーID/backup/setup-cms-media-$(date +%Y%m%d).tar.gz \
+  -C /home/サーバーID/setup-cms/storage/app public
 ```
 
-### 更新手順
+### Gitを使った更新手順
 
-更新前に必ずバックアップします。
+更新前に必ずバックアップし、ローカルでテスト済みの変更を`main`へpushします。XServerのチェックアウトに未コミット変更がないことを確認してから更新します。
 
 ```bash
-cd /home/サーバーID/mycms
+cd /home/サーバーID/setup-cms
 PHP_BIN=/usr/bin/php8.4
 
+git status --short
+git fetch origin
+git log --oneline HEAD..origin/main
+
 $PHP_BIN artisan down
+git pull --ff-only origin main
 composer install --no-dev --optimize-autoloader
 $PHP_BIN artisan migrate --force
 $PHP_BIN artisan optimize:clear
@@ -551,13 +614,54 @@ $PHP_BIN artisan optimize
 $PHP_BIN artisan up
 ```
 
-`public/build`などが変わった場合は公開先にも反映します。公開側`index.php`の絶対パス設定を上書きしないよう注意してください。
+`git status --short`に意図しない変更が表示された場合はpullせず、変更内容を確認してください。`.env`と`storage`はGit管理外なので`git pull`では上書きされません。
+
+JavaScriptやCSSを変更した場合は、ローカルで`npm run build`を実行して`public/build`をSCP/SFTPで再転送します。その後、公開側のアセットだけを更新します。
+
+```bash
+PUBLIC_DIR=/home/サーバーID/example.com/public_html/cms.example.com
+mkdir -p "$PUBLIC_DIR/build"
+cp -a public/build/. "$PUBLIC_DIR/build/"
+cp public/.htaccess public/.user.ini public/favicon.ico public/robots.txt "$PUBLIC_DIR/"
+```
+
+公開側の`index.php`は絶対パスを設定した専用ファイルなので、通常の更新ではGit版を上書きしません。`index.php`自体に変更が必要な場合だけ、差分を確認して手作業で反映します。
+
+更新後にコミットと動作を確認します。
+
+```bash
+git log -1 --oneline
+curl -I https://cms.example.com/up
+curl https://cms.example.com/api/v1/posts
+```
+
+### コードを一時的にロールバックする
+
+直前のコミットへコードだけ戻して確認する場合は、戻したいコミットIDを指定します。DBマイグレーションは自動的に戻らないため、DB変更を含む場合はバックアップからの復元計画も必要です。
+
+```bash
+cd /home/サーバーID/setup-cms
+git log --oneline -10
+$PHP_BIN artisan down
+git switch --detach 戻したいコミットID
+composer install --no-dev --optimize-autoloader
+$PHP_BIN artisan optimize:clear
+$PHP_BIN artisan optimize
+$PHP_BIN artisan up
+```
+
+最新版へ戻す場合：
+
+```bash
+git switch main
+git pull --ff-only origin main
+```
 
 DB復元例：
 
 ```bash
 mysql -h MYSQLホスト名 -u DBユーザー名 -p DB名 \
-  < /home/サーバーID/backup/mycms-YYYYMMDD.sql
+  < /home/サーバーID/backup/setup-cms-YYYYMMDD.sql
 ```
 
 ## セキュリティ確認
@@ -650,6 +754,7 @@ $PHP_BIN artisan test
 - [XServer: MySQL設定](https://www.xserver.ne.jp/manual/man_db_setting.php)
 - [XServer: サブドメイン設定](https://www.xserver.ne.jp/manual/man_domain_subdomain_setting.php)
 - [XServer: Cron設定](https://www.xserver.ne.jp/manual/man_program_cron.php)
+- [GitHub: Deploy Keyの管理](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)
 - [WordPress: エクスポート](https://ja.wordpress.org/support/article/tools-export-screen/)
 - [Laravel 13: Deployment](https://laravel.com/framework/docs/deployment)
 - [Astro連携例](docs/astro-integration.md)
