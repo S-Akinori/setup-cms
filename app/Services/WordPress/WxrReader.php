@@ -58,6 +58,39 @@ XML;
         }
     }
 
+    /** @return list<string> */
+    public function referencedImagePaths(string $path): array
+    {
+        $attachments = [];
+        $thumbnailIds = [];
+        $urls = [];
+
+        foreach ($this->items($path) as $item) {
+            if ($item['type'] === 'attachment' && $item['id'] !== '' && $item['attachment_url'] !== '') {
+                $attachments[$item['id']] = $item['attachment_url'];
+
+                continue;
+            }
+            if (! in_array($item['type'], ['post', 'page'], true)) {
+                continue;
+            }
+
+            array_push($urls, ...$this->contentImageUrls($item['content']));
+            $thumbnailId = $item['meta']['_thumbnail_id'] ?? null;
+            if (is_string($thumbnailId) && $thumbnailId !== '') {
+                $thumbnailIds[] = $thumbnailId;
+            }
+        }
+
+        foreach (array_unique($thumbnailIds) as $thumbnailId) {
+            if (isset($attachments[$thumbnailId])) {
+                $urls[] = $attachments[$thumbnailId];
+            }
+        }
+
+        return array_values(array_unique(array_filter(array_map(fn (string $url) => $this->uploadsPath($url), $urls))));
+    }
+
     /**
      * WordPressのエクスポートファイルにXML宣言前の空行やUTF-8 BOMがある場合、
      * 元ファイルを変更せず一時ストリーム上で正規化する。
@@ -192,5 +225,51 @@ XML;
         $node = $xpath->query($query, $context)?->item(0);
 
         return $node ? trim($node->textContent) : '';
+    }
+
+    /** @return list<string> */
+    private function contentImageUrls(string $html): array
+    {
+        if (trim($html) === '') {
+            return [];
+        }
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        $loaded = $document->loadHTML('<?xml encoding="UTF-8"><div id="content-root">'.$html.'</div>', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_COMPACT);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+        if (! $loaded) {
+            return [];
+        }
+
+        $urls = [];
+        foreach ($document->getElementsByTagName('img') as $image) {
+            $source = trim($image->getAttribute('src'));
+            if ($source !== '') {
+                $urls[] = $source;
+            }
+        }
+
+        return $urls;
+    }
+
+    private function uploadsPath(string $url): ?string
+    {
+        $path = parse_url(html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'), PHP_URL_PATH);
+        if (! is_string($path)) {
+            return null;
+        }
+
+        $path = str_replace('\\', '/', $path);
+        $marker = '/wp-content/uploads/';
+        $position = stripos($path, $marker);
+        if ($position === false) {
+            return null;
+        }
+
+        $relative = ltrim(rawurldecode(substr($path, $position + strlen($marker))), '/');
+
+        return $relative !== '' && ! str_contains($relative, '..') ? $relative : null;
     }
 }

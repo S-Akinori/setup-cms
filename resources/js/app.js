@@ -307,3 +307,14 @@ if (title && slug && !slug.value) {
         slug.value = title.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     });
 }
+
+const wordpressImportForm = document.querySelector('[data-wordpress-import-form]');
+const wordpressImportSubmit = document.querySelector('[data-wordpress-import-submit]');
+const wordpressImportStatus = document.querySelector('[data-wordpress-import-status]');
+if (wordpressImportForm && wordpressImportSubmit && wordpressImportStatus) {
+    wordpressImportForm.addEventListener('submit', () => {
+        wordpressImportSubmit.disabled = true;
+        wordpressImportSubmit.textContent = '処理中…';
+        wordpressImportStatus.hidden = false;
+    });
+}

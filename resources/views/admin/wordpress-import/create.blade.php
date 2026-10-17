@@ -12,11 +12,16 @@
             <p class="muted">WordPressの「ツール → エクスポート」で取得したファイルを使用します。</p>
         </div>
 
-        <form method="post" action="{{ route('admin.wordpress-import.store') }}" enctype="multipart/form-data" class="stack">
+        <form method="post" action="{{ route('admin.wordpress-import.store') }}" enctype="multipart/form-data" class="stack" data-wordpress-import-form>
             @csrf
             <label>WXR/XMLファイル
                 <input type="file" name="wxr" accept=".xml,application/xml,text/xml" required>
                 <small>最大50MB。アップロード後の一時ファイルは処理完了時に削除されます。</small>
+            </label>
+
+            <label>画像ZIP <small>任意</small>
+                <input type="file" name="uploads_zip" accept=".zip,application/zip">
+                <small>WordPressの<code>wp-content/uploads</code>フォルダ、またはその中身をZIPにしてください。最大512MBです。</small>
             </label>
 
             <label>実行方法
@@ -31,7 +36,8 @@
                 同じスラッグの既存コンテンツを更新する
             </label>
 
-            <button class="button primary" type="submit">実行する</button>
+            <button class="button primary" type="submit" data-wordpress-import-submit>実行する</button>
+            <p class="upload-status is-loading" role="status" aria-live="polite" hidden data-wordpress-import-status>アップロードとインポートを処理しています。この画面を閉じずにお待ちください。</p>
         </form>
 
         <div class="import-notes">
@@ -41,7 +47,7 @@
                 <li>公開状態、公開日時、概要、主なYoast SEO項目</li>
                 <li>HTML本文はMarkdownへ自動変換</li>
             </ul>
-            <p>この画面からの取込では画像ファイル自体はコピーされず、本文内の旧URLを保持します。画像も移行する場合はREADMEのCLI移行手順を使用してください。</p>
+            <p>画像ZIPを指定すると、本文画像とアイキャッチに必要なファイルだけを高速に展開し、画像ライブラリへコピーします。本文URLもSetUp CMSのURLへ置き換えます。事前確認ではZIPを展開せず、本番インポート時だけ画像を処理します。</p>
         </div>
     </section>
 

@@ -111,10 +111,10 @@ php artisan migrate
 php artisan cms:create-admin admin@example.com
 npm run build
 php artisan test
-php -d upload_max_filesize=50M -d post_max_size=52M -d max_execution_time=300 -d max_input_time=300 artisan serve
+php -d upload_max_filesize=512M -d post_max_size=565M -d max_execution_time=600 -d max_input_time=600 artisan serve
 ```
 
-管理者パスワードは8文字以上です。コマンド履歴へ残さないため、通常は`--password`を付けず対話入力します。上記のPHPオプションは、最大50MBのWordPress WXR/XMLを管理画面から取り込むためのローカル開発用設定です。起動後、`http://127.0.0.1:8000/login`を開きます。
+管理者パスワードは8文字以上です。コマンド履歴へ残さないため、通常は`--password`を付けず対話入力します。上記のPHPオプションは、最大50MBのWordPress WXR/XMLと最大512MBの画像ZIPを管理画面から取り込むためのローカル開発用設定です。起動後、`http://127.0.0.1:8000/login`を開きます。
 
 ## XServerへ設置する
 
@@ -387,8 +387,10 @@ ln -s /home/サーバーID/setup-cms/storage/app/public \
 `public/.user.ini`には次が設定済みです。
 
 ```ini
-upload_max_filesize = 50M
-post_max_size = 52M
+upload_max_filesize = 512M
+post_max_size = 565M
+max_execution_time = 600
+max_input_time = 600
 ```
 
 反映されない場合は、サーバーパネルの「php.ini設定」でも同じ値以上にします。
@@ -419,7 +421,11 @@ curl https://cms.example.com/api/v1/posts
 
 ## WordPressから移行する
 
-管理画面の「WordPress移行」からWXR/XMLをアップロードできます。最初に「事前確認」を実行し、対象件数と警告を確認してから「本番インポート」を実行してください。管理画面からの取込では画像ファイル自体はコピーされないため、画像も移行する場合は以下のCLI手順を使用します。
+管理画面の「WordPress移行」からWXR/XMLと画像ZIPをアップロードできます。最初に「事前確認」を実行し、対象件数と警告を確認してから「本番インポート」を実行してください。
+
+画像も移行する場合は、`wp-content/uploads`フォルダまたはその中身をZIPにまとめ、画面の「画像ZIP」へ指定します。JPEG、PNG、WebPが対象で、WXRを先に解析して本文画像とアイキャッチに必要なファイルだけをZIPから展開します。画像は画像ライブラリへコピーされ、本文URLもSetUp CMSのURLへ置き換わります。ZIPは最大512MB、各画像は最大10MB、展開後は最大2GB・20,000ファイルです。事前確認ではZIPを展開せず、本番インポート時だけ画像を処理します。
+
+512MBを超える場合やサーバーのアップロード上限を変更できない場合は、後述のCLI手順を使用してください。
 
 ### 移行内容
 
@@ -445,7 +451,7 @@ WordPress管理画面の「ツール → エクスポート → すべてのコ�
 
 画像も移す場合は、FTPまたはSSHで`wp-content/uploads`をフォルダ構造ごと取得します。
 
-### 2. 非公開領域へ配置する
+### 2. CLIで移行する場合は非公開領域へ配置する
 
 ```text
 /home/サーバーID/import/wordpress-export.xml

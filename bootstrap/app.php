@@ -22,7 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             $isWordPressImport = $request->is('admin/wordpress-import');
             $field = $isWordPressImport ? 'wxr' : 'image';
             $message = $isWordPressImport
-                ? 'WordPressのWXR/XMLファイルは50MB以下にしてください。'
+                ? 'WordPressのWXR/XMLは50MB以下、画像ZIPは512MB以下にしてください。サーバーのpost_max_sizeも確認してください。'
                 : 'アップロードできる画像のファイルサイズは10MBまでです。';
 
             if ($request->expectsJson()) {
