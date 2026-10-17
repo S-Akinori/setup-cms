@@ -29,4 +29,16 @@ class PublicContentApiTest extends TestCase
         $response = $this->getJson('/api/v1/posts/cached')->assertOk();
         $response->assertHeader('ETag')->assertHeader('Last-Modified');
     }
+
+    public function test_static_pages_have_separate_api_endpoints(): void
+    {
+        $author = User::factory()->create();
+        Post::create(['content_type' => 'post', 'slug' => 'article', 'title' => 'Article', 'body_markdown' => 'Article body', 'status' => 'published', 'published_at' => now(), 'author_id' => $author->id]);
+        Post::create(['content_type' => 'page', 'slug' => 'about', 'title' => 'About', 'body_markdown' => 'Page body', 'status' => 'published', 'published_at' => now(), 'author_id' => $author->id]);
+
+        $this->getJson('/api/v1/posts')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.slug', 'article');
+        $this->getJson('/api/v1/pages')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.slug', 'about');
+        $this->getJson('/api/v1/pages/about')->assertOk()->assertJsonPath('data.type', 'page');
+        $this->getJson('/api/v1/posts/about')->assertNotFound();
+    }
 }

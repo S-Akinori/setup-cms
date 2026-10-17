@@ -16,6 +16,20 @@ class AdminAccessTest extends TestCase
         $this->get('/admin/posts')->assertRedirect('/login');
     }
 
+    public function test_cms_pages_are_marked_as_noindex(): void
+    {
+        $this->get('/login')
+            ->assertOk()
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet')
+            ->assertSee('<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">', false);
+
+        $this->get('/api/v1/posts')
+            ->assertOk()
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
+
+        $this->assertStringContainsString('Disallow: /', file_get_contents(public_path('robots.txt')));
+    }
+
     public function test_authenticated_admin_can_open_posts(): void
     {
         $user = User::factory()->create(['is_admin' => true]);

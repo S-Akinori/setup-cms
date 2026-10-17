@@ -56,7 +56,12 @@ class HtmlToMarkdown
                 return $node->nodeValue ?? '';
             }
 
-            $text = preg_replace('/\s+/u', ' ', str_replace("\u{00A0}", ' ', $node->nodeValue ?? '')) ?? '';
+            $text = str_replace(["\r\n", "\r", "\u{00A0}"], ["\n", "\n", ' '], $node->nodeValue ?? '');
+            if (trim($text) === '') {
+                return '';
+            }
+            $text = preg_replace('/[^\S\n]+/u', ' ', $text) ?? $text;
+            $text = preg_replace('/ *\n+ */u', "\n\n", $text) ?? $text;
 
             return $this->escape($text);
         }
@@ -73,26 +78,26 @@ class HtmlToMarkdown
         $content = $this->children($node, $imageResolver, $inPre || $tag === 'pre');
 
         return match ($tag) {
-            'h1' => '# '.trim($content)."\n\n",
-            'h2' => '## '.trim($content)."\n\n",
-            'h3' => '### '.trim($content)."\n\n",
-            'h4' => '#### '.trim($content)."\n\n",
-            'h5' => '##### '.trim($content)."\n\n",
-            'h6' => '###### '.trim($content)."\n\n",
-            'p', 'div', 'section', 'article', 'header', 'footer', 'figure', 'figcaption' => trim($content)."\n\n",
+            'h1' => $this->block('# '.trim($content)),
+            'h2' => $this->block('## '.trim($content)),
+            'h3' => $this->block('### '.trim($content)),
+            'h4' => $this->block('#### '.trim($content)),
+            'h5' => $this->block('##### '.trim($content)),
+            'h6' => $this->block('###### '.trim($content)),
+            'p', 'div', 'section', 'article', 'header', 'footer', 'figure', 'figcaption' => $this->block($content),
             'br' => "  \n",
             'strong', 'b' => trim($content) === '' ? '' : '**'.trim($content).'**',
             'em', 'i' => trim($content) === '' ? '' : '*'.trim($content).'*',
             'del', 's', 'strike' => trim($content) === '' ? '' : '~~'.trim($content).'~~',
             'a' => $this->link($node, $content),
             'img' => $this->image($node, $imageResolver),
-            'ul' => $this->list($node, false, $imageResolver)."\n",
-            'ol' => $this->list($node, true, $imageResolver)."\n",
+            'ul' => $this->block($this->list($node, false, $imageResolver)),
+            'ol' => $this->block($this->list($node, true, $imageResolver)),
             'li' => trim($content),
             'blockquote' => $this->blockquote($content),
             'pre' => $this->codeBlock($node->textContent),
             'code' => $inPre ? $content : $this->inlineCode($node->textContent),
-            'hr' => "\n---\n\n",
+            'hr' => $this->block('---'),
             default => $content,
         };
     }
@@ -153,14 +158,14 @@ class HtmlToMarkdown
 
     private function blockquote(string $content): string
     {
-        return preg_replace('/^/m', '> ', trim($content))."\n\n";
+        return $this->block(preg_replace('/^/m', '> ', trim($content)) ?? '');
     }
 
     private function codeBlock(string $content): string
     {
         $fence = str_contains($content, '```') ? '````' : '```';
 
-        return $fence."\n".rtrim($content)."\n".$fence."\n\n";
+        return $this->block($fence."\n".rtrim($content)."\n".$fence);
     }
 
     private function inlineCode(string $content): string
@@ -173,5 +178,12 @@ class HtmlToMarkdown
     private function escape(string $text): string
     {
         return preg_replace('/([\\\\*_\[\]<>])/u', '\\\\$1', $text) ?? $text;
+    }
+
+    private function block(string $content): string
+    {
+        $content = trim($content);
+
+        return $content === '' ? '' : "\n\n{$content}\n\n";
     }
 }

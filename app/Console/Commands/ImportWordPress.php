@@ -16,7 +16,7 @@ class ImportWordPress extends Command
                             {--update-existing : 同じslugの記事を上書きする}
                             {--dry-run : データベースや画像を変更せず対象件数を確認する}';
 
-    protected $description = 'WordPressのWXR/XMLから投稿、カテゴリー、タグ、画像を移行する';
+    protected $description = 'WordPressのWXR/XMLから投稿、固定ページ、カテゴリー、タグ、コメント、画像を移行する';
 
     public function handle(WordPressImporter $importer): int
     {
@@ -57,12 +57,14 @@ class ImportWordPress extends Command
         }
 
         $this->table(['結果', '件数'], [
-            ['新規記事', $report['created']],
-            ['更新記事', $report['updated']],
+            ['新規コンテンツ', $report['created']],
+            ['更新コンテンツ', $report['updated']],
             ['スキップ', $report['skipped']],
             ['対象外データ', $report['ignored']],
             ['コピーした画像', $report['images']],
             ['見つからない画像', $report['missing_images']],
+            ['インポートしたコメント', $report['comments_imported']],
+            ['対象外・重複コメント', $report['comments_skipped']],
         ]);
 
         foreach (array_slice($report['warnings'], 0, 20) as $warning) {

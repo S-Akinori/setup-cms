@@ -55,7 +55,7 @@ class MediaUploadTest extends TestCase
     {
         $user = User::factory()->create(['is_admin' => true]);
 
-        $this->withServerVariables(['CONTENT_LENGTH' => 13 * 1024 * 1024])
+        $this->withServerVariables(['CONTENT_LENGTH' => 53 * 1024 * 1024])
             ->actingAs($user)
             ->postJson('/admin/media')
             ->assertStatus(413)

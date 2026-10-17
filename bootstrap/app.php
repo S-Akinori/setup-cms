@@ -19,15 +19,19 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (PostTooLargeException $exception, Request $request) {
-            $message = 'アップロードできる画像のファイルサイズは10MBまでです。';
+            $isWordPressImport = $request->is('admin/wordpress-import');
+            $field = $isWordPressImport ? 'wxr' : 'image';
+            $message = $isWordPressImport
+                ? 'WordPressのWXR/XMLファイルは50MB以下にしてください。'
+                : 'アップロードできる画像のファイルサイズは10MBまでです。';
 
             if ($request->expectsJson()) {
                 return response()->json([
                     'message' => $message,
-                    'errors' => ['image' => [$message]],
+                    'errors' => [$field => [$message]],
                 ], 413);
             }
 
-            return back()->withErrors(['image' => $message]);
+            return response($message, 413)->header('Content-Type', 'text/plain; charset=UTF-8');
         });
     })->create();

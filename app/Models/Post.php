@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['slug', 'title', 'description', 'body_markdown', 'status', 'published_at', 'scheduled_at', 'author_id', 'category_id', 'featured_image_id', 'seo_title', 'seo_description', 'canonical_url', 'noindex', 'lock_version'])]
+#[Fillable(['content_type', 'slug', 'title', 'description', 'body_markdown', 'status', 'published_at', 'scheduled_at', 'author_id', 'category_id', 'featured_image_id', 'seo_title', 'seo_description', 'canonical_url', 'noindex', 'comments_enabled', 'lock_version'])]
 class Post extends Model
 {
     use HasUlids, SoftDeletes;
@@ -21,6 +21,7 @@ class Post extends Model
             'published_at' => 'datetime',
             'scheduled_at' => 'datetime',
             'noindex' => 'boolean',
+            'comments_enabled' => 'boolean',
         ];
     }
 
@@ -49,8 +50,23 @@ class Post extends Model
         return $this->hasMany(PostRevision::class);
     }
 
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class);
+    }
+
     public function scopePublished($query)
     {
         return $query->where('status', 'published')->whereNotNull('published_at')->where('published_at', '<=', now());
+    }
+
+    public function scopeArticles($query)
+    {
+        return $query->where('content_type', 'post');
+    }
+
+    public function scopePages($query)
+    {
+        return $query->where('content_type', 'page');
     }
 }

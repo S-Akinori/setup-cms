@@ -1,4 +1,5 @@
 @php($editing = isset($post))
+@php($isPage = ($contentType ?? 'post') === 'page')
 @if($editing)<input type="hidden" name="lock_version" value="{{ old('lock_version', $post->lock_version) }}">@endif
 
 <div class="editor-grid">
@@ -99,7 +100,7 @@
 
     <aside class="stack editor-sidebar">
         <section class="panel stack">
-            <h2>記事設定</h2>
+            <h2>{{ $isPage ? '固定ページ設定' : '記事設定' }}</h2>
             <label>スラッグ<input name="slug" value="{{ old('slug', $post->slug ?? '') }}" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" data-slug></label>
             <label>概要<textarea name="description" rows="3" maxlength="500">{{ old('description', $post->description ?? '') }}</textarea></label>
             <label>状態<select name="status">@foreach(['draft'=>'下書き','scheduled'=>'予約公開','published'=>'公開','archived'=>'保管'] as $value=>$label)<option value="{{ $value }}" @selected(old('status', $post->status ?? 'draft')===$value)>{{ $label }}</option>@endforeach</select></label>
@@ -107,10 +108,22 @@
 
         <section class="panel stack">
             <h2>分類・公開</h2>
-            <label>カテゴリ<input name="category" value="{{ old('category', $post->category?->name ?? '') }}"></label>
-            <label>タグ <small>カンマ区切り</small><input name="tags" value="{{ old('tags', isset($post) ? $post->tags->pluck('name')->join(', ') : '') }}"></label>
+            @unless($isPage)
+                <label>カテゴリー
+                    <select name="category_id">
+                        <option value="">未分類</option>
+                        @foreach($categories as $category)
+                            <option value="{{ $category->id }}" @selected((string) old('category_id', $post->category_id ?? '') === (string) $category->id)>{{ $category->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <small><a href="{{ route('admin.categories.index') }}">カテゴリーを追加・編集</a></small>
+                <label>タグ <small>カンマ区切り</small><input name="tags" value="{{ old('tags', isset($post) ? $post->tags->pluck('name')->join(', ') : '') }}"></label>
+            @endunless
             <label>公開日時<input type="datetime-local" name="published_at" value="{{ old('published_at', isset($post) && $post->published_at ? $post->published_at->format('Y-m-d\TH:i') : '') }}"></label>
             <label>予約日時<input type="datetime-local" name="scheduled_at" value="{{ old('scheduled_at', isset($post) && $post->scheduled_at ? $post->scheduled_at->format('Y-m-d\TH:i') : '') }}"></label>
+            <input type="hidden" name="comments_enabled" value="0">
+            <label class="check"><input type="checkbox" name="comments_enabled" value="1" @checked(old('comments_enabled', $post->comments_enabled ?? true))>コメントを受け付ける</label>
             <label>アイキャッチ<select name="featured_image_id"><option value="">なし</option>@foreach($mediaItems as $media)<option value="{{ $media->id }}" @selected(old('featured_image_id', $post->featured_image_id ?? '')===$media->id)>{{ $media->alt_text }} ({{ $media->original_name }})</option>@endforeach</select></label>
         </section>
 
@@ -122,6 +135,6 @@
             <label class="check"><input type="checkbox" name="noindex" value="1" @checked(old('noindex', $post->noindex ?? false))>検索結果に表示しない</label>
         </section>
 
-        <button class="button primary sticky-save" type="submit">{{ $editing ? '変更を保存' : '記事を作成' }}</button>
+        <button class="button primary sticky-save" type="submit">{{ $editing ? '変更を保存' : ($isPage ? '固定ページを作成' : '記事を作成') }}</button>
     </aside>
 </div>

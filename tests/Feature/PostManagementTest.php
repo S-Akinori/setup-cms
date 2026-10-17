@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Category;
 use App\Models\Post;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -14,16 +15,18 @@ class PostManagementTest extends TestCase
     public function test_admin_can_create_markdown_post_with_taxonomies(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
+        $category = Category::create(['name' => '技術', 'slug' => 'technology']);
         $response = $this->actingAs($admin)->post('/admin/posts', [
             'title' => '安全な記事', 'slug' => 'safe-post', 'description' => '概要',
             'body_markdown' => '# Heading\n\nInline math: $x^2$', 'status' => 'published',
-            'category' => '技術', 'tags' => 'Laravel, Astro', 'noindex' => '0',
+            'category_id' => $category->id, 'tags' => 'Laravel, Astro', 'noindex' => '0',
         ]);
 
         $post = Post::where('slug', 'safe-post')->firstOrFail();
         $response->assertRedirect(route('admin.posts.edit', $post));
         $this->assertSame(2, $post->tags()->count());
         $this->assertSame('技術', $post->category->name);
+        $this->assertSame('post', $post->content_type);
         $this->assertDatabaseHas('post_revisions', ['post_id' => $post->id, 'version' => 1]);
         $this->assertDatabaseHas('build_jobs', ['reason' => 'post.published', 'status' => 'pending']);
     }

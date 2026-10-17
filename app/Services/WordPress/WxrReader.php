@@ -24,12 +24,16 @@ XML;
      */
     public function items(string $path): Generator
     {
-        if (! is_file($path) || ! is_readable($path)) {
+        if (! is_file($path)) {
             throw new RuntimeException("WXRファイルを読み込めません: {$path}");
         }
 
+        [$readPath, $temporaryFile] = $this->normalizedPath($path);
         $reader = new XMLReader;
-        if (! $reader->open($path, null, LIBXML_NONET | LIBXML_COMPACT | LIBXML_PARSEHUGE)) {
+        if (! $reader->open($readPath, null, LIBXML_NONET | LIBXML_COMPACT | LIBXML_PARSEHUGE)) {
+            if (is_resource($temporaryFile)) {
+                fclose($temporaryFile);
+            }
             throw new RuntimeException('WXRファイルを開けませんでした。');
         }
 
@@ -48,7 +52,60 @@ XML;
             }
         } finally {
             $reader->close();
+            if (is_resource($temporaryFile)) {
+                fclose($temporaryFile);
+            }
         }
+    }
+
+    /**
+     * WordPressのエクスポートファイルにXML宣言前の空行やUTF-8 BOMがある場合、
+     * 元ファイルを変更せず一時ストリーム上で正規化する。
+     *
+     * @return array{string, resource|null}
+     */
+    private function normalizedPath(string $path): array
+    {
+        $source = fopen($path, 'rb');
+        if ($source === false) {
+            throw new RuntimeException("WXRファイルを読み込めません: {$path}");
+        }
+
+        $prefix = fread($source, 4096);
+        if ($prefix === false) {
+            fclose($source);
+
+            throw new RuntimeException('WXRファイルの先頭を読み込めませんでした。');
+        }
+
+        $normalized = preg_replace('/\A(?:\xEF\xBB\xBF)?[ \t\r\n]*(?=<\?xml\b)/', '', $prefix);
+        if (! is_string($normalized) || $normalized === $prefix) {
+            fclose($source);
+
+            return [$path, null];
+        }
+
+        $temporary = tmpfile();
+        if ($temporary === false) {
+            fclose($source);
+
+            throw new RuntimeException('WXR解析用の一時ファイルを作成できませんでした。');
+        }
+
+        fwrite($temporary, $normalized);
+        stream_copy_to_stream($source, $temporary);
+        fclose($source);
+        fflush($temporary);
+
+        $metadata = stream_get_meta_data($temporary);
+        $temporaryPath = $metadata['uri'] ?? null;
+        if (! is_string($temporaryPath)) {
+            fclose($temporary);
+
+            throw new RuntimeException('WXR解析用の一時ファイルを参照できませんでした。');
+        }
+
+        return [$temporaryPath, $temporary];
     }
 
     /**
@@ -91,6 +148,27 @@ XML;
             }
         }
 
+        $comments = [];
+        foreach ($xpath->query('./*[local-name()="comment"]', $item) ?: [] as $node) {
+            if (! $node instanceof DOMElement) {
+                continue;
+            }
+
+            $comments[] = [
+                'id' => $this->value($xpath, './*[local-name()="comment_id"]', $node),
+                'parent_id' => $this->value($xpath, './*[local-name()="comment_parent"]', $node),
+                'author_name' => $this->value($xpath, './*[local-name()="comment_author"]', $node),
+                'author_email' => $this->value($xpath, './*[local-name()="comment_author_email"]', $node),
+                'author_url' => $this->value($xpath, './*[local-name()="comment_author_url"]', $node),
+                'author_ip' => $this->value($xpath, './*[local-name()="comment_author_IP"]', $node),
+                'date' => $this->value($xpath, './*[local-name()="comment_date_gmt"]', $node)
+                    ?: $this->value($xpath, './*[local-name()="comment_date"]', $node),
+                'content' => $this->value($xpath, './*[local-name()="comment_content"]', $node),
+                'approved' => $this->value($xpath, './*[local-name()="comment_approved"]', $node),
+                'type' => $this->value($xpath, './*[local-name()="comment_type"]', $node),
+            ];
+        }
+
         return [
             'id' => $this->value($xpath, './*[local-name()="post_id"]', $item),
             'type' => $this->value($xpath, './*[local-name()="post_type"]', $item),
@@ -104,6 +182,8 @@ XML;
             'attachment_url' => $this->value($xpath, './*[local-name()="attachment_url"]', $item),
             'categories' => $categories,
             'meta' => $meta,
+            'comment_status' => $this->value($xpath, './*[local-name()="comment_status"]', $item),
+            'comments' => $comments,
         ];
     }
 

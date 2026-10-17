@@ -1,6 +1,6 @@
 # SetUp CMS 構築・移行・運用マニュアル
 
-SetUp CMSは、Laravelで動作する小規模なヘッドレスCMSです。記事はMarkdownで保存し、AstroなどのフロントエンドへJSON APIで提供します。管理画面のエディタ、画像管理、リビジョン、予約公開、LaTeX記法、WordPress移行機能を備えています。
+SetUp CMSは、Laravelで動作する小規模なヘッドレスCMSです。記事と固定ページはMarkdownで保存し、AstroなどのフロントエンドへJSON APIで提供します。管理画面のエディタ、カテゴリー管理、コメント管理、画像管理、リビジョン、予約公開、LaTeX記法、WordPress移行機能を備えています。
 
 この文書では、ローカル環境での確認からXServerへの設置、WordPress記事と画像の移行、Astroとの連携、公開後の保守までを説明します。
 
@@ -36,6 +36,10 @@ SetUp CMSは、Laravelで動作する小規模なヘッドレスCMSです。記�
 | ログイン | `https://cms.example.com/login` |
 | 記事一覧API | `https://cms.example.com/api/v1/posts` |
 | 記事詳細API | `https://cms.example.com/api/v1/posts/{slug}` |
+| 固定ページ一覧API | `https://cms.example.com/api/v1/pages` |
+| 固定ページ詳細API | `https://cms.example.com/api/v1/pages/{slug}` |
+| 記事コメントAPI | `https://cms.example.com/api/v1/posts/{slug}/comments` |
+| 固定ページコメントAPI | `https://cms.example.com/api/v1/pages/{slug}/comments` |
 | 分類API | `https://cms.example.com/api/v1/taxonomies` |
 | ヘルスチェック | `https://cms.example.com/up` |
 
@@ -107,10 +111,10 @@ php artisan migrate
 php artisan cms:create-admin admin@example.com
 npm run build
 php artisan test
-php artisan serve
+php -d upload_max_filesize=50M -d post_max_size=52M -d max_execution_time=300 -d max_input_time=300 artisan serve
 ```
 
-管理者パスワードは8文字以上です。コマンド履歴へ残さないため、通常は`--password`を付けず対話入力します。起動後、`http://127.0.0.1:8000/login`を開きます。
+管理者パスワードは8文字以上です。コマンド履歴へ残さないため、通常は`--password`を付けず対話入力します。上記のPHPオプションは、最大50MBのWordPress WXR/XMLを管理画面から取り込むためのローカル開発用設定です。起動後、`http://127.0.0.1:8000/login`を開きます。
 
 ## XServerへ設置する
 
@@ -141,6 +145,7 @@ Laravel本体と`.env`は公開しません。XServerの`public_html`には、La
 | `cms.example.com` | CMS用サブドメイン |
 | `MYSQLホスト名` | 「MySQL情報」に表示される値 |
 | `PHP_BIN` | 「コマンドパス一覧」に表示されるPHP 8.4 |
+| `COMPOSER_BIN` | `command -v composer`で確認したComposer本体のパス |
 
 ### 1. サブドメイン、SSL、PHPを設定する
 
@@ -166,9 +171,11 @@ SSH接続後、「サーバー情報 → コマンドパス一覧」にあるPHP
 /usr/bin/php8.4 -v
 /usr/bin/php8.4 -m
 PHP_BIN=/usr/bin/php8.4
+COMPOSER_BIN=$(command -v composer)
+"$PHP_BIN" "$COMPOSER_BIN" --version
 ```
 
-実際のPHPパスが異なる場合は必ず置き換えてください。
+サーバーパネルでPHP 8.4へ切り替えても、SSHで`php -v`を実行した際の既定バージョンは別管理のため古いことがあります。ComposerとArtisanは、以降必ず`$PHP_BIN`を付けて実行します。実際のPHPパスが異なる場合は「サーバー情報 → コマンドパス一覧」の値へ置き換えてください。
 
 ### 3. MySQLを作る
 
@@ -251,14 +258,9 @@ cloneしたディレクトリで本番用PHP依存関係をインストールし
 
 ```bash
 cd /home/サーバーID/setup-cms
-composer install --no-dev --optimize-autoloader
-```
-
-`composer`が古いCLI版PHPを使ってエラーになる場合は、確認済みのPHP 8.4でComposer本体を起動します。
-
-```bash
 PHP_BIN=/usr/bin/php8.4
-$PHP_BIN $(command -v composer) install --no-dev --optimize-autoloader
+COMPOSER_BIN=$(command -v composer)
+"$PHP_BIN" "$COMPOSER_BIN" install --no-dev --optimize-autoloader
 ```
 
 Composerを使えない場合は、ローカルの別コピーで同じコマンドを実行し、生成された`vendor`もアップロードします。
@@ -385,8 +387,8 @@ ln -s /home/サーバーID/setup-cms/storage/app/public \
 `public/.user.ini`には次が設定済みです。
 
 ```ini
-upload_max_filesize = 10M
-post_max_size = 12M
+upload_max_filesize = 50M
+post_max_size = 52M
 ```
 
 反映されない場合は、サーバーパネルの「php.ini設定」でも同じ値以上にします。
@@ -417,6 +419,8 @@ curl https://cms.example.com/api/v1/posts
 
 ## WordPressから移行する
 
+管理画面の「WordPress移行」からWXR/XMLをアップロードできます。最初に「事前確認」を実行し、対象件数と警告を確認してから「本番インポート」を実行してください。管理画面からの取込では画像ファイル自体はコピーされないため、画像も移行する場合は以下のCLI手順を使用します。
+
 ### 移行内容
 
 | WordPress | SetUp CMS |
@@ -427,10 +431,11 @@ curl https://cms.example.com/api/v1/posts
 | 投稿日時 | 公開日時または予約日時 |
 | 抜粋 | 概要 |
 | カテゴリー・タグ | カテゴリー・タグ |
+| 固定ページ | 固定ページ |
 | 本文画像・アイキャッチ | CMSメディアへコピー |
 | 主なYoast SEO項目 | SEOタイトル、説明、canonical、noindex |
 
-固定ページ、コメント、カスタム投稿タイプ、WordPressユーザー、プラグイン設定は移行しません。投稿者は指定したSetUp CMS管理者になります。
+通常コメントは、返信関係と承認状態（承認済み・承認待ち・スパム）を含めて移行します。トラックバック、ピンバック、カスタム投稿タイプ、WordPressユーザー、プラグイン設定は移行しません。投稿者は指定したSetUp CMS管理者になります。
 
 ### 1. バックアップとエクスポート
 
@@ -498,7 +503,7 @@ WordPress本文は自動変換されます。
 
 ### 5. 移行結果と切り替え
 
-1. 件数がWordPressの投稿数と合うか確認
+1. 件数がWordPressの投稿数・固定ページ数と合うか確認
 2. 公開・下書き・予約状態を確認
 3. 文字化け、Markdown、数式を確認
 4. 本文画像とアイキャッチを確認
@@ -523,6 +528,13 @@ CMS_API_URL=https://cms.example.com
 ```text
 GET https://cms.example.com/api/v1/posts?limit=100
 GET https://cms.example.com/api/v1/posts/example-slug
+```
+
+固定ページ一覧と詳細：
+
+```text
+GET https://cms.example.com/api/v1/pages?limit=100
+GET https://cms.example.com/api/v1/pages/about
 ```
 
 LaTeX記法を表示する場合：
@@ -600,6 +612,7 @@ tar -czf /home/サーバーID/backup/setup-cms-media-$(date +%Y%m%d).tar.gz \
 ```bash
 cd /home/サーバーID/setup-cms
 PHP_BIN=/usr/bin/php8.4
+COMPOSER_BIN=$(command -v composer)
 
 git status --short
 git fetch origin
@@ -607,7 +620,7 @@ git log --oneline HEAD..origin/main
 
 $PHP_BIN artisan down
 git pull --ff-only origin main
-composer install --no-dev --optimize-autoloader
+"$PHP_BIN" "$COMPOSER_BIN" install --no-dev --optimize-autoloader
 $PHP_BIN artisan migrate --force
 $PHP_BIN artisan optimize:clear
 $PHP_BIN artisan optimize
@@ -641,10 +654,13 @@ curl https://cms.example.com/api/v1/posts
 
 ```bash
 cd /home/サーバーID/setup-cms
+PHP_BIN=/usr/bin/php8.4
+COMPOSER_BIN=$(command -v composer)
+
 git log --oneline -10
 $PHP_BIN artisan down
 git switch --detach 戻したいコミットID
-composer install --no-dev --optimize-autoloader
+"$PHP_BIN" "$COMPOSER_BIN" install --no-dev --optimize-autoloader
 $PHP_BIN artisan optimize:clear
 $PHP_BIN artisan optimize
 $PHP_BIN artisan up
@@ -680,6 +696,22 @@ mysql -h MYSQLホスト名 -u DBユーザー名 -p DB名 \
 - 管理画面と`/up`を監視
 
 ## トラブルシューティング
+
+### `Root composer.json requires php ^8.3`と表示される
+
+SSHの既定PHPが8.1などの古いバージョンです。`--ignore-platform-req=php`は使わず、PHP 8.4のCLIでComposerを起動します。
+
+```bash
+cd /home/サーバーID/setup-cms
+PHP_BIN=/usr/bin/php8.4
+COMPOSER_BIN=$(command -v composer)
+
+php -v
+"$PHP_BIN" -v
+"$PHP_BIN" "$COMPOSER_BIN" install --no-dev --optimize-autoloader
+```
+
+2つ目がPHP 8.4.xになれば正しい状態です。`/usr/bin/php8.4`が存在しない場合は、サーバーパネルの「サーバー情報 → コマンドパス一覧」でPHP 8.4（CLI）のパスを確認してください。
 
 ### 500エラーまたは真っ白
 
