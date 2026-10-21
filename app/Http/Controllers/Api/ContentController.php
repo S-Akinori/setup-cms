@@ -8,6 +8,7 @@ use App\Models\Post;
 use App\Models\Tag;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\CursorPaginator;
 
 class ContentController extends Controller
 {
@@ -23,9 +24,11 @@ class ContentController extends Controller
             ->when($validated['updated_after'] ?? null, fn ($q, $date) => $q->where('updated_at', '>', $date))
             ->when($validated['category'] ?? null, fn ($q, $slug) => $q->whereHas('category', fn ($c) => $c->where('slug', $slug)))
             ->when($validated['tag'] ?? null, fn ($q, $slug) => $q->whereHas('tags', fn ($t) => $t->where('slug', $slug)))
-            ->orderByDesc('published_at')->cursorPaginate($validated['limit'] ?? 20);
+            ->orderByDesc('published_at')
+            ->orderByDesc('id')
+            ->cursorPaginate($validated['limit'] ?? 20);
 
-        return response()->json($posts->through(fn (Post $post) => $this->serialize($post)))
+        return response()->json($this->serializePaginator($posts))
             ->header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     }
 
@@ -52,9 +55,11 @@ class ContentController extends Controller
         $pages = Post::pages()->published()->with(['author:id,name', 'category:id,name,slug', 'featuredImage'])
             ->when($validated['updated_after'] ?? null, fn ($q, $date) => $q->where('updated_at', '>', $date))
             ->when($validated['category'] ?? null, fn ($q, $slug) => $q->whereHas('category', fn ($c) => $c->where('slug', $slug)))
-            ->orderBy('title')->cursorPaginate($validated['limit'] ?? 20);
+            ->orderBy('title')
+            ->orderBy('id')
+            ->cursorPaginate($validated['limit'] ?? 20);
 
-        return response()->json($pages->through(fn (Post $page) => $this->serialize($page)))
+        return response()->json($this->serializePaginator($pages))
             ->header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     }
 
@@ -81,6 +86,28 @@ class ContentController extends Controller
     {
         return response()->json(['data' => ['categories' => Category::orderBy('name')->get(['name', 'slug']), 'tags' => Tag::orderBy('name')->get(['name', 'slug'])]])
             ->header('Cache-Control', 'public, max-age=300');
+    }
+
+    private function serializePaginator(CursorPaginator $paginator): array
+    {
+        // Cursor values must be calculated while the collection still contains
+        // Post models with every ordered column available.
+        $nextCursor = $paginator->nextCursor()?->encode();
+        $nextPageUrl = $paginator->nextPageUrl();
+        $previousCursor = $paginator->previousCursor()?->encode();
+        $previousPageUrl = $paginator->previousPageUrl();
+
+        return [
+            'data' => $paginator->getCollection()
+                ->map(fn (Post $post) => $this->serialize($post))
+                ->values(),
+            'path' => $paginator->path(),
+            'per_page' => $paginator->perPage(),
+            'next_cursor' => $nextCursor,
+            'next_page_url' => $nextPageUrl,
+            'prev_cursor' => $previousCursor,
+            'prev_page_url' => $previousPageUrl,
+        ];
     }
 
     private function serialize(Post $post): array

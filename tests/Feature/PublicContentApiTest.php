@@ -31,6 +31,74 @@ class PublicContentApiTest extends TestCase
         $response->assertHeader('ETag')->assertHeader('Last-Modified');
     }
 
+    public function test_post_cursor_pagination_serializes_without_losing_order_columns(): void
+    {
+        $author = User::factory()->create();
+        $publishedAt = now()->startOfSecond();
+
+        foreach (range(1, 3) as $number) {
+            Post::create([
+                'slug' => 'cursor-post-'.$number,
+                'title' => 'Cursor post '.$number,
+                'body_markdown' => 'Body',
+                'status' => 'published',
+                'published_at' => $publishedAt,
+                'author_id' => $author->id,
+            ]);
+        }
+
+        $firstPage = $this->getJson('/api/v1/posts?limit=2')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+        $nextCursor = $firstPage->json('next_cursor');
+
+        $this->assertNotEmpty($nextCursor);
+
+        $secondPage = $this->getJson('/api/v1/posts?'.http_build_query([
+            'limit' => 2,
+            'cursor' => $nextCursor,
+        ]))->assertOk()->assertJsonCount(1, 'data');
+
+        $this->assertEmpty(array_intersect(
+            $firstPage->json('data.*.id'),
+            $secondPage->json('data.*.id'),
+        ));
+    }
+
+    public function test_page_cursor_pagination_serializes_without_losing_order_columns(): void
+    {
+        $author = User::factory()->create();
+
+        foreach (range(1, 3) as $number) {
+            Post::create([
+                'content_type' => 'page',
+                'slug' => 'cursor-page-'.$number,
+                'title' => 'Same title',
+                'body_markdown' => 'Body',
+                'status' => 'published',
+                'published_at' => now(),
+                'author_id' => $author->id,
+            ]);
+        }
+
+        $firstPage = $this->getJson('/api/v1/pages?limit=2')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+        $nextCursor = $firstPage->json('next_cursor');
+
+        $this->assertNotEmpty($nextCursor);
+
+        $secondPage = $this->getJson('/api/v1/pages?'.http_build_query([
+            'limit' => 2,
+            'cursor' => $nextCursor,
+        ]))->assertOk()->assertJsonCount(1, 'data');
+
+        $this->assertEmpty(array_intersect(
+            $firstPage->json('data.*.id'),
+            $secondPage->json('data.*.id'),
+        ));
+    }
+
     public function test_static_pages_have_separate_api_endpoints(): void
     {
         $author = User::factory()->create();
