@@ -17,7 +17,7 @@ class MediaController extends Controller
 {
     public function index(): View
     {
-        return view('admin.media.index', ['mediaItems' => Media::latest()->paginate(30)]);
+        return view('admin.media.index', ['mediaItems' => Media::latest()->paginate(30)->onEachSide(1)]);
     }
 
     public function store(Request $request, ImageSanitizer $sanitizer): RedirectResponse|JsonResponse

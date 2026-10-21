@@ -15,7 +15,7 @@ class CategoryController extends Controller
 {
     public function index(): View
     {
-        $categories = Category::withCount('posts')->orderBy('name')->paginate(30);
+        $categories = Category::withCount('posts')->orderBy('name')->paginate(30)->onEachSide(1);
 
         return view('admin.categories.index', compact('categories'));
     }

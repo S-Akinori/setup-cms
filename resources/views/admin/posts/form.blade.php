@@ -108,23 +108,70 @@
 
         <section class="panel stack">
             <h2>分類・公開</h2>
+            <label>カテゴリー
+                <select name="category_id">
+                    <option value="">未分類</option>
+                    @foreach($categories as $category)
+                        <option value="{{ $category->id }}" @selected((string) old('category_id', $post->category_id ?? '') === (string) $category->id)>{{ $category->name }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <small><a href="{{ route('admin.categories.index') }}">カテゴリーを追加・編集</a></small>
             @unless($isPage)
-                <label>カテゴリー
-                    <select name="category_id">
-                        <option value="">未分類</option>
-                        @foreach($categories as $category)
-                            <option value="{{ $category->id }}" @selected((string) old('category_id', $post->category_id ?? '') === (string) $category->id)>{{ $category->name }}</option>
-                        @endforeach
-                    </select>
-                </label>
-                <small><a href="{{ route('admin.categories.index') }}">カテゴリーを追加・編集</a></small>
                 <label>タグ <small>カンマ区切り</small><input name="tags" value="{{ old('tags', isset($post) ? $post->tags->pluck('name')->join(', ') : '') }}"></label>
             @endunless
             <label>公開日時<input type="datetime-local" name="published_at" value="{{ old('published_at', isset($post) && $post->published_at ? $post->published_at->format('Y-m-d\TH:i') : '') }}"></label>
             <label>予約日時<input type="datetime-local" name="scheduled_at" value="{{ old('scheduled_at', isset($post) && $post->scheduled_at ? $post->scheduled_at->format('Y-m-d\TH:i') : '') }}"></label>
             <input type="hidden" name="comments_enabled" value="0">
             <label class="check"><input type="checkbox" name="comments_enabled" value="1" @checked(old('comments_enabled', $post->comments_enabled ?? true))>コメントを受け付ける</label>
-            <label>アイキャッチ<select name="featured_image_id"><option value="">なし</option>@foreach($mediaItems as $media)<option value="{{ $media->id }}" @selected(old('featured_image_id', $post->featured_image_id ?? '')===$media->id)>{{ $media->alt_text }} ({{ $media->original_name }})</option>@endforeach</select></label>
+            @php($featuredId = (string) old('featured_image_id', $post->featured_image_id ?? ''))
+            @php($featuredMedia = $mediaItems->first(fn ($media) => (string) $media->id === $featuredId) ?? ($post->featuredImage ?? null))
+            <div class="featured-picker" data-featured-picker data-upload-url="{{ route('admin.media.store') }}">
+                <span class="field-label">アイキャッチ画像</span>
+                <input type="hidden" name="featured_image_id" value="{{ $featuredId }}" data-featured-id>
+                <div class="featured-preview" data-featured-preview>
+                    <img src="{{ $featuredMedia ? asset('storage/'.$featuredMedia->path) : '' }}" alt="{{ $featuredMedia?->alt_text ?? '' }}" data-featured-preview-image @if(!$featuredMedia) hidden @endif>
+                    <div class="featured-empty" data-featured-empty @if($featuredMedia) hidden @endif>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4zM7 15l3.2-3.2 2.5 2.5 1.8-1.8L18 16M8.5 9a1.25 1.25 0 1 0 0 .01"/></svg>
+                        <span>アイキャッチ画像は未設定です</span>
+                    </div>
+                </div>
+                <p class="featured-caption" data-featured-caption>{{ $featuredMedia?->alt_text ?? 'ギャラリーから選択するか、新しい画像をアップロードしてください。' }}</p>
+                <div class="featured-actions">
+                    <button type="button" class="button secondary" data-featured-open>画像を選択</button>
+                    <button type="button" class="text-danger" data-featured-remove @if(!$featuredMedia) hidden @endif>選択を解除</button>
+                </div>
+
+                <dialog class="media-dialog featured-dialog" data-featured-dialog aria-labelledby="featured-dialog-title">
+                    <div class="featured-dialog-layout">
+                        <header class="media-dialog-header">
+                            <div>
+                                <h2 id="featured-dialog-title">アイキャッチ画像を選択</h2>
+                                <p>アップロード済みの画像を選ぶか、新しい画像を追加します。</p>
+                            </div>
+                            <button type="button" class="dialog-close" data-featured-close aria-label="閉じる">&times;</button>
+                        </header>
+                        <section class="featured-upload" aria-labelledby="featured-upload-title">
+                            <div><strong id="featured-upload-title">新しい画像をアップロード</strong><small>JPEG・PNG・WebP、10MBまで</small></div>
+                            <label>画像<input type="file" accept="image/jpeg,image/png,image/webp" data-featured-file></label>
+                            <label>代替テキスト<input type="text" maxlength="300" data-featured-alt placeholder="画像の内容を簡潔に説明"></label>
+                            <button type="button" class="button primary" data-featured-upload>アップロードして選択</button>
+                            <p class="upload-status featured-upload-status" data-featured-status role="status" aria-live="polite"></p>
+                        </section>
+                        <div class="media-library featured-library" data-featured-library aria-label="アップロード済み画像">
+                            @forelse($mediaItems as $media)
+                                <button type="button" class="media-library-item featured-library-item" data-featured-select data-media-id="{{ $media->id }}" data-media-url="{{ asset('storage/'.$media->path) }}" data-media-alt="{{ $media->alt_text }}" aria-pressed="{{ (string) $media->id === $featuredId ? 'true' : 'false' }}">
+                                    <img src="{{ asset('storage/'.$media->path) }}" alt="" loading="lazy">
+                                    <span>{{ $media->alt_text }}</span>
+                                    <small>{{ $media->width }} × {{ $media->height }} px</small>
+                                </button>
+                            @empty
+                                <div class="media-library-empty" data-featured-library-empty><strong>画像はまだありません</strong><span>上のフォームからアップロードしてください。</span></div>
+                            @endforelse
+                        </div>
+                    </div>
+                </dialog>
+            </div>
         </section>
 
         <section class="panel stack">

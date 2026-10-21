@@ -18,6 +18,7 @@ class CommentController extends Controller
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
             ->latest()
             ->paginate(30)
+            ->onEachSide(1)
             ->withQueryString();
 
         return view('admin.comments.index', compact('comments'));

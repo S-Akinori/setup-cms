@@ -24,11 +24,16 @@ class PostController extends Controller
     public function index(Request $request): View
     {
         $contentType = $this->contentType($request);
+        $title = trim((string) $request->query('title', ''));
+        $categoryId = $request->integer('category');
         $posts = Post::where('content_type', $contentType)->with(['category', 'author'])->latest('updated_at')
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
-            ->paginate(20)->withQueryString();
+            ->when($title !== '', fn ($query) => $query->where('title', 'like', '%'.$title.'%'))
+            ->when($categoryId > 0, fn ($query) => $query->where('category_id', $categoryId))
+            ->paginate(20)->withQueryString()->onEachSide(1);
+        $categories = Category::orderBy('name')->get(['id', 'name']);
 
-        return view('admin.posts.index', compact('posts', 'contentType'));
+        return view('admin.posts.index', compact('posts', 'contentType', 'categories'));
     }
 
     public function create(Request $request): View
@@ -43,7 +48,7 @@ class PostController extends Controller
         $post = DB::transaction(function () use ($request, $data, $contentType) {
             $data['content_type'] = $contentType;
             $data['author_id'] = $request->user()->id;
-            $data['category_id'] = $contentType === 'post' ? ($data['category_id'] ?? null) : null;
+            $data['category_id'] = $data['category_id'] ?? null;
             unset($data['tags'], $data['lock_version']);
             $this->normalizeDates($data);
             $post = Post::create($data);
@@ -66,7 +71,7 @@ class PostController extends Controller
     {
         $contentType = $this->contentType($request);
         $this->ensureContentType($post, $contentType);
-        $post->load(['tags', 'category', 'revisions' => fn ($q) => $q->latest()->limit(20)]);
+        $post->load(['tags', 'category', 'featuredImage', 'revisions' => fn ($q) => $q->latest()->limit(20)]);
 
         return view('admin.posts.edit', array_merge($this->formData($contentType), compact('post')));
     }
@@ -84,7 +89,7 @@ class PostController extends Controller
                 throw ValidationException::withMessages(['lock_version' => '別の操作で記事が更新されました。ページを再読み込みしてください。']);
             }
             $this->revision($post, $request->user()->id);
-            $data['category_id'] = $contentType === 'post' ? ($data['category_id'] ?? null) : null;
+            $data['category_id'] = $data['category_id'] ?? null;
             unset($data['tags'], $data['lock_version']);
             $data['lock_version'] = $expectedVersion + 1;
             $this->normalizeDates($data);

@@ -308,6 +308,152 @@ if (title && slug && !slug.value) {
     });
 }
 
+const featuredPicker = document.querySelector('[data-featured-picker]');
+if (featuredPicker) {
+    const featuredId = featuredPicker.querySelector('[data-featured-id]');
+    const previewImage = featuredPicker.querySelector('[data-featured-preview-image]');
+    const emptyPreview = featuredPicker.querySelector('[data-featured-empty]');
+    const caption = featuredPicker.querySelector('[data-featured-caption]');
+    const openButton = featuredPicker.querySelector('[data-featured-open]');
+    const removeButton = featuredPicker.querySelector('[data-featured-remove]');
+    const dialog = featuredPicker.querySelector('[data-featured-dialog]');
+    const closeButton = featuredPicker.querySelector('[data-featured-close]');
+    const library = featuredPicker.querySelector('[data-featured-library]');
+    const fileInput = featuredPicker.querySelector('[data-featured-file]');
+    const altInput = featuredPicker.querySelector('[data-featured-alt]');
+    const uploadButton = featuredPicker.querySelector('[data-featured-upload]');
+    const status = featuredPicker.querySelector('[data-featured-status]');
+    const acceptedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    const maxFileSize = 10 * 1024 * 1024;
+
+    const setFeaturedStatus = (message, state = '') => {
+        status.textContent = message;
+        status.className = `upload-status featured-upload-status${state ? ` is-${state}` : ''}`;
+    };
+
+    const selectFeatured = ({ id, url, alt }) => {
+        featuredId.value = id;
+        previewImage.src = url;
+        previewImage.alt = alt;
+        previewImage.hidden = false;
+        emptyPreview.hidden = true;
+        caption.textContent = alt;
+        removeButton.hidden = false;
+        library.querySelectorAll('[data-featured-select]').forEach((button) => {
+            button.setAttribute('aria-pressed', button.dataset.mediaId === String(id) ? 'true' : 'false');
+        });
+        dialog.close();
+    };
+
+    library.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-featured-select]');
+        if (!button || !library.contains(button)) return;
+
+        selectFeatured({
+            id: button.dataset.mediaId,
+            url: button.dataset.mediaUrl,
+            alt: button.dataset.mediaAlt,
+        });
+    });
+
+    openButton.addEventListener('click', () => dialog.showModal());
+    closeButton.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close();
+    });
+    removeButton.addEventListener('click', () => {
+        featuredId.value = '';
+        previewImage.src = '';
+        previewImage.alt = '';
+        previewImage.hidden = true;
+        emptyPreview.hidden = false;
+        caption.textContent = 'ギャラリーから選択するか、新しい画像をアップロードしてください。';
+        removeButton.hidden = true;
+        library.querySelectorAll('[data-featured-select]').forEach((button) => button.setAttribute('aria-pressed', 'false'));
+    });
+
+    fileInput.addEventListener('change', () => {
+        const file = fileInput.files?.[0];
+        if (file && !altInput.value.trim()) {
+            altInput.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+        }
+        setFeaturedStatus('');
+    });
+
+    uploadButton.addEventListener('click', async () => {
+        const file = fileInput.files?.[0];
+        const alt = altInput.value.trim();
+        if (!file) {
+            setFeaturedStatus('アップロードする画像を選択してください。', 'error');
+            fileInput.focus();
+            return;
+        }
+        if (!acceptedTypes.has(file.type) || file.size > maxFileSize) {
+            setFeaturedStatus('JPEG、PNG、WebP形式の10MB以下の画像を選択してください。', 'error');
+            fileInput.focus();
+            return;
+        }
+        if (!alt) {
+            setFeaturedStatus('代替テキストを入力してください。', 'error');
+            altInput.focus();
+            return;
+        }
+
+        uploadButton.disabled = true;
+        setFeaturedStatus('画像をアップロードしています。', 'loading');
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('alt_text', alt);
+            const response = await fetch(featuredPicker.dataset.uploadUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                },
+                credentials: 'same-origin',
+                body: formData,
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const validationMessage = Object.values(payload.errors ?? {}).flat()[0];
+                throw new Error(validationMessage || payload.message || '画像をアップロードできませんでした。');
+            }
+
+            const media = payload.data;
+            library.querySelector('[data-featured-library-empty]')?.remove();
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'media-library-item featured-library-item';
+            option.dataset.featuredSelect = '';
+            option.dataset.mediaId = media.id;
+            option.dataset.mediaUrl = media.url;
+            option.dataset.mediaAlt = media.alt;
+            option.setAttribute('aria-pressed', 'false');
+
+            const thumbnail = document.createElement('img');
+            thumbnail.src = media.url;
+            thumbnail.alt = '';
+            const name = document.createElement('span');
+            name.textContent = media.alt;
+            const dimensions = document.createElement('small');
+            dimensions.textContent = `${media.width} × ${media.height} px`;
+            option.append(thumbnail, name, dimensions);
+            library.prepend(option);
+
+            fileInput.value = '';
+            altInput.value = '';
+            setFeaturedStatus('アップロードしました。', 'success');
+            selectFeatured(media);
+        } catch (error) {
+            setFeaturedStatus(error instanceof Error ? error.message : '画像をアップロードできませんでした。', 'error');
+        } finally {
+            uploadButton.disabled = false;
+        }
+    });
+}
+
 const wordpressImportForm = document.querySelector('[data-wordpress-import-form]');
 const wordpressImportSubmit = document.querySelector('[data-wordpress-import-submit]');
 const wordpressImportStatus = document.querySelector('[data-wordpress-import-status]');

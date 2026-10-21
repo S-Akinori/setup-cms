@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Category;
 use App\Models\Post;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -33,12 +34,13 @@ class PublicContentApiTest extends TestCase
     public function test_static_pages_have_separate_api_endpoints(): void
     {
         $author = User::factory()->create();
+        $category = Category::create(['name' => '案内', 'slug' => 'guide']);
         Post::create(['content_type' => 'post', 'slug' => 'article', 'title' => 'Article', 'body_markdown' => 'Article body', 'status' => 'published', 'published_at' => now(), 'author_id' => $author->id]);
-        Post::create(['content_type' => 'page', 'slug' => 'about', 'title' => 'About', 'body_markdown' => 'Page body', 'status' => 'published', 'published_at' => now(), 'author_id' => $author->id]);
+        Post::create(['content_type' => 'page', 'slug' => 'about', 'title' => 'About', 'body_markdown' => 'Page body', 'status' => 'published', 'published_at' => now(), 'author_id' => $author->id, 'category_id' => $category->id]);
 
         $this->getJson('/api/v1/posts')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.slug', 'article');
-        $this->getJson('/api/v1/pages')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.slug', 'about');
-        $this->getJson('/api/v1/pages/about')->assertOk()->assertJsonPath('data.type', 'page');
+        $this->getJson('/api/v1/pages?category=guide')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.slug', 'about');
+        $this->getJson('/api/v1/pages/about')->assertOk()->assertJsonPath('data.type', 'page')->assertJsonPath('data.category.slug', 'guide');
         $this->getJson('/api/v1/posts/about')->assertNotFound();
     }
 }
