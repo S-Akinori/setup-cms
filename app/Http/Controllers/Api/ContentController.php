@@ -55,8 +55,8 @@ class ContentController extends Controller
         $pages = Post::pages()->published()->with(['author:id,name', 'category:id,name,slug', 'featuredImage'])
             ->when($validated['updated_after'] ?? null, fn ($q, $date) => $q->where('updated_at', '>', $date))
             ->when($validated['category'] ?? null, fn ($q, $slug) => $q->whereHas('category', fn ($c) => $c->where('slug', $slug)))
-            ->orderBy('title')
-            ->orderBy('id')
+            ->orderByDesc('published_at')
+            ->orderByDesc('id')
             ->cursorPaginate($validated['limit'] ?? 20);
 
         return response()->json($this->serializePaginator($pages))
@@ -78,7 +78,7 @@ class ContentController extends Controller
 
     public function manifest(): JsonResponse
     {
-        return response()->json(['data' => Post::published()->orderBy('slug')->get(['id', 'content_type', 'slug', 'updated_at', 'published_at'])])
+        return response()->json(['data' => Post::published()->orderByDesc('published_at')->orderByDesc('id')->get(['id', 'content_type', 'slug', 'updated_at', 'published_at'])])
             ->header('Cache-Control', 'public, max-age=60');
     }
 

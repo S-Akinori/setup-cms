@@ -100,6 +100,19 @@ class PostManagementTest extends TestCase
             ->assertSee('value="Laravel"', false);
     }
 
+    public function test_admin_content_list_is_ordered_by_published_date_descending(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        Post::create(['title' => '古い記事', 'slug' => 'older-post', 'body_markdown' => '本文', 'status' => 'published', 'published_at' => now()->subDays(2), 'author_id' => $admin->id]);
+        Post::create(['title' => '新しい記事', 'slug' => 'newer-post', 'body_markdown' => '本文', 'status' => 'published', 'published_at' => now(), 'author_id' => $admin->id]);
+
+        $this->actingAs($admin)
+            ->get('/admin/posts')
+            ->assertOk()
+            ->assertSeeInOrder(['新しい記事', '古い記事']);
+    }
+
     public function test_article_pagination_uses_the_admin_layout(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);

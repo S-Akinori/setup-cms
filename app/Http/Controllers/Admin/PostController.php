@@ -26,10 +26,12 @@ class PostController extends Controller
         $contentType = $this->contentType($request);
         $title = trim((string) $request->query('title', ''));
         $categoryId = $request->integer('category');
-        $posts = Post::where('content_type', $contentType)->with(['category', 'author'])->latest('updated_at')
+        $posts = Post::where('content_type', $contentType)->with(['category', 'author'])
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
             ->when($title !== '', fn ($query) => $query->where('title', 'like', '%'.$title.'%'))
             ->when($categoryId > 0, fn ($query) => $query->where('category_id', $categoryId))
+            ->orderByDesc('published_at')
+            ->orderByDesc('id')
             ->paginate(20)->withQueryString()->onEachSide(1);
         $categories = Category::orderBy('name')->get(['id', 'name']);
 

@@ -99,6 +99,33 @@ class PublicContentApiTest extends TestCase
         ));
     }
 
+    public function test_content_lists_are_ordered_by_published_date_descending(): void
+    {
+        $author = User::factory()->create();
+        $older = now()->subDays(2);
+        $newer = now();
+
+        Post::create(['slug' => 'older-post', 'title' => 'Older post', 'body_markdown' => 'Body', 'status' => 'published', 'published_at' => $older, 'author_id' => $author->id]);
+        Post::create(['slug' => 'newer-post', 'title' => 'Newer post', 'body_markdown' => 'Body', 'status' => 'published', 'published_at' => $newer, 'author_id' => $author->id]);
+        Post::create(['content_type' => 'page', 'slug' => 'older-page', 'title' => 'Older page', 'body_markdown' => 'Body', 'status' => 'published', 'published_at' => $older, 'author_id' => $author->id]);
+        Post::create(['content_type' => 'page', 'slug' => 'newer-page', 'title' => 'Newer page', 'body_markdown' => 'Body', 'status' => 'published', 'published_at' => $newer, 'author_id' => $author->id]);
+
+        $this->getJson('/api/v1/posts')
+            ->assertOk()
+            ->assertJsonPath('data.0.slug', 'newer-post')
+            ->assertJsonPath('data.1.slug', 'older-post');
+        $this->getJson('/api/v1/pages')
+            ->assertOk()
+            ->assertJsonPath('data.0.slug', 'newer-page')
+            ->assertJsonPath('data.1.slug', 'older-page');
+        $manifest = $this->getJson('/api/v1/content-manifest')->assertOk();
+        $publishedDates = array_map('strtotime', $manifest->json('data.*.published_at'));
+        $descendingDates = $publishedDates;
+        rsort($descendingDates);
+
+        $this->assertSame($descendingDates, $publishedDates);
+    }
+
     public function test_static_pages_have_separate_api_endpoints(): void
     {
         $author = User::factory()->create();
