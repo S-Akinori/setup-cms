@@ -56,6 +56,13 @@ class PostManagementTest extends TestCase
             'body_markdown' => '<https://example.com/articles/physics>',
             'status' => 'draft',
         ])->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->post('/admin/posts', [
+            'title' => 'Content components test',
+            'slug' => 'content-components-test',
+            'body_markdown' => "[詳しく見る](https://example.com/guide \"cms-button:primary\")\n\n> [ポイント](# \"cms-box:info\")\n>\n> 囲いボックスの本文です。",
+            'status' => 'draft',
+        ])->assertSessionHasNoErrors();
     }
 
     public function test_editor_empty_line_placeholders_are_normalized_before_validation(): void

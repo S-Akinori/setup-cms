@@ -24,6 +24,9 @@
                 <button type="button" class="toolbar-button" data-markdown-command="ul" title="箇条書きを挿入" disabled>li</button>
                 <button type="button" class="toolbar-button" data-markdown-command="ol" title="番号付きリストを挿入" disabled>ol</button>
                 <span class="toolbar-divider" aria-hidden="true"></span>
+                <button type="button" class="toolbar-button" data-content-command="button" title="リンクボタンを挿入" disabled>ボタン</button>
+                <button type="button" class="toolbar-button" data-content-command="box" title="囲いボックスを挿入" disabled>囲い</button>
+                <span class="toolbar-divider" aria-hidden="true"></span>
                 <button type="button" class="toolbar-button image-command" data-image-command title="画像を選択して挿入" disabled>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4zM7 15l3.2-3.2 2.5 2.5 1.8-1.8L18 16M8.5 9a1.25 1.25 0 1 0 0 .01"/></svg>
                     画像
@@ -38,7 +41,7 @@
             </div>
 
             <div class="editor-foot">
-                <p class="editor-help">先頭で「## 」「- 」などを入力すると、その場で表示が切り替わります。画像のドラッグ＆ドロップと、URL単独行のリンクカード表示に対応しています。</p>
+                <p class="editor-help">Markdown、画像、URLカードに加え、ツールバーからボタンと囲いボックスを挿入できます。</p>
                 <p class="upload-status" data-upload-status role="status" aria-live="polite"></p>
             </div>
         </div>

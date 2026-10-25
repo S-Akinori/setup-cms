@@ -577,7 +577,25 @@ export default defineConfig({
 4. 画像をドラッグ＆ドロップするか、アップロード済み画像を選択
 5. 保存
 
-本文はエディタ内でMarkdown表示とプレビューが切り替わります。H2、H3、箇条書き、番号付きリスト、画像はツールバーから挿入できます。
+本文はエディタ内でMarkdown表示とプレビューが切り替わります。H2、H3、箇条書き、番号付きリスト、画像、ボタン、囲いボックスはツールバーから挿入できます。
+
+### ボタンと囲いボックス
+
+ボタンは、リンクのtitleへ`cms-button:primary`または`cms-button:secondary`を指定します。
+
+```markdown
+[詳しく見る](https://example.com/guide "cms-button:primary")
+```
+
+囲いボックスはMarkdownの引用とリンクtitleを使います。種類は`info`、`warning`、`success`、`danger`です。
+
+```markdown
+> [ポイント](# "cms-box:info")
+>
+> ここに通常のMarkdownを書けます。
+```
+
+APIでは上記のMarkdown記法をそのまま`bodyMarkdown`へ返します。公開サイトではAstro側のMarkdown処理でボタンと囲いボックスへ変換し、サイト固有のスタイルを適用してください。任意の生HTMLは保存できません。
 
 | 状態 | 動作 |
 | --- | --- |

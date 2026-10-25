@@ -61,6 +61,8 @@ class AdminAccessTest extends TestCase
             ->assertSee('data-markdown-command="h3"', false)
             ->assertSee('data-markdown-command="ul"', false)
             ->assertSee('data-markdown-command="ol"', false)
+            ->assertSee('data-content-command="button"', false)
+            ->assertSee('data-content-command="box"', false)
             ->assertSee('data-image-command', false)
             ->assertSee('data-media-dialog', false)
             ->assertSee('data-image-upload-trigger', false)

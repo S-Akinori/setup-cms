@@ -9,7 +9,7 @@ import { linkTooltip } from '@milkdown/crepe/feature/link-tooltip';
 import { listItem } from '@milkdown/crepe/feature/list-item';
 import { placeholder } from '@milkdown/crepe/feature/placeholder';
 import { toolbar } from '@milkdown/crepe/feature/toolbar';
-import { callCommand } from '@milkdown/kit/utils';
+import { callCommand, insert } from '@milkdown/kit/utils';
 import {
     insertImageCommand,
     wrapInBulletListCommand,
@@ -35,6 +35,7 @@ const mediaDialogClose = document.querySelector('[data-media-dialog-close]');
 const imageUploadTrigger = document.querySelector('[data-image-upload-trigger]');
 const mediaSelectButtons = document.querySelectorAll('[data-media-select]');
 const commandButtons = document.querySelectorAll('[data-markdown-command]');
+const contentCommandButtons = document.querySelectorAll('[data-content-command]');
 const standaloneUrlPattern = /^https?:\/\/[^\s<>]+$/i;
 
 const normalizeMarkdown = (markdown) => {
@@ -214,6 +215,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         editorLoading?.remove();
         editorShell.classList.add('is-ready');
         commandButtons.forEach((button) => { button.disabled = false; });
+        contentCommandButtons.forEach((button) => { button.disabled = false; });
         if (imageCommand) imageCommand.disabled = false;
 
         const proseMirror = editorRoot.querySelector('.ProseMirror');
@@ -225,15 +227,15 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
 
                 if (!isStandaloneUrl) {
                     delete paragraph.dataset.linkHost;
-                    return;
+                } else {
+                    try {
+                        paragraph.dataset.linkHost = new URL(value).hostname.replace(/^www\./i, '');
+                    } catch {
+                        paragraph.classList.remove('standalone-link-card');
+                        delete paragraph.dataset.linkHost;
+                    }
                 }
 
-                try {
-                    paragraph.dataset.linkHost = new URL(value).hostname.replace(/^www\./i, '');
-                } catch {
-                    paragraph.classList.remove('standalone-link-card');
-                    delete paragraph.dataset.linkHost;
-                }
             });
         };
         let decorationFrame = null;
@@ -277,6 +279,21 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
             button.addEventListener('click', () => {
                 commands[button.dataset.markdownCommand]?.();
                 markdownField.value = normalizeMarkdown(crepe.getMarkdown());
+            });
+        });
+
+        const contentTemplates = {
+            button: '[ボタンの文字](https://example.com "cms-button:primary")',
+            box: '> [ポイント](# "cms-box:info")\n>\n> ここに内容を入力してください。',
+        };
+        contentCommandButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const template = contentTemplates[button.dataset.contentCommand];
+                if (!template) return;
+
+                crepe.editor.action(insert(template));
+                markdownField.value = normalizeMarkdown(crepe.getMarkdown());
+                proseMirror?.focus();
             });
         });
 
