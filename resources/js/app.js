@@ -33,7 +33,11 @@ const imageInput = document.querySelector('[data-image-input]');
 const mediaDialog = document.querySelector('[data-media-dialog]');
 const mediaDialogClose = document.querySelector('[data-media-dialog-close]');
 const imageUploadTrigger = document.querySelector('[data-image-upload-trigger]');
-const mediaSelectButtons = document.querySelectorAll('[data-media-select]');
+const mediaLibrary = document.querySelector('[data-media-library]');
+const mediaSearchInput = document.querySelector('[data-media-search]');
+const mediaSearchSubmit = document.querySelector('[data-media-search-submit]');
+const mediaLibraryStatus = document.querySelector('[data-media-library-status]');
+const mediaLoadMore = document.querySelector('[data-media-load-more]');
 const commandButtons = document.querySelectorAll('[data-markdown-command]');
 const contentCommandButtons = document.querySelectorAll('[data-content-command]');
 const standaloneUrlPattern = /^https?:\/\/[^\s<>]+$/i;
@@ -177,9 +181,11 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         }
     };
 
+    const initialMarkdown = normalizeMarkdown(markdownField.value);
+    markdownField.value = initialMarkdown;
     const crepe = new CrepeBuilder({
         root: editorRoot,
-        defaultValue: markdownField.value,
+        defaultValue: initialMarkdown,
     })
         .addFeature(cursor)
         .addFeature(listItem)
@@ -219,39 +225,6 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         if (imageCommand) imageCommand.disabled = false;
 
         const proseMirror = editorRoot.querySelector('.ProseMirror');
-        const decorateStandaloneUrls = () => {
-            proseMirror?.querySelectorAll('p').forEach((paragraph) => {
-                const value = paragraph.textContent?.trim() ?? '';
-                const isStandaloneUrl = standaloneUrlPattern.test(value);
-                paragraph.classList.toggle('standalone-link-card', isStandaloneUrl);
-
-                if (!isStandaloneUrl) {
-                    delete paragraph.dataset.linkHost;
-                } else {
-                    try {
-                        paragraph.dataset.linkHost = new URL(value).hostname.replace(/^www\./i, '');
-                    } catch {
-                        paragraph.classList.remove('standalone-link-card');
-                        delete paragraph.dataset.linkHost;
-                    }
-                }
-
-            });
-        };
-        let decorationFrame = null;
-        const scheduleStandaloneUrlDecoration = () => {
-            if (decorationFrame !== null) return;
-            decorationFrame = window.requestAnimationFrame(() => {
-                decorationFrame = null;
-                decorateStandaloneUrls();
-            });
-        };
-        const linkCardObserver = new MutationObserver(scheduleStandaloneUrlDecoration);
-        if (proseMirror) {
-            linkCardObserver.observe(proseMirror, { childList: true, subtree: true, characterData: true });
-            decorateStandaloneUrls();
-            window.addEventListener('pagehide', () => linkCardObserver.disconnect(), { once: true });
-        }
 
         const commands = {
             h2: () => crepe.editor.action(callCommand(wrapInHeadingCommand.key, 2)),
@@ -276,6 +249,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         };
 
         commandButtons.forEach((button) => {
+            button.addEventListener('mousedown', (event) => event.preventDefault());
             button.addEventListener('click', () => {
                 commands[button.dataset.markdownCommand]?.();
                 markdownField.value = normalizeMarkdown(crepe.getMarkdown());
@@ -287,6 +261,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
             box: '> [ポイント](# "cms-box:info")\n>\n> ここに内容を入力してください。',
         };
         contentCommandButtons.forEach((button) => {
+            button.addEventListener('mousedown', (event) => event.preventDefault());
             button.addEventListener('click', () => {
                 const template = contentTemplates[button.dataset.contentCommand];
                 if (!template) return;
@@ -297,8 +272,98 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
             });
         });
 
-        if (imageCommand && imageInput && mediaDialog) {
-            imageCommand.addEventListener('click', () => mediaDialog.showModal());
+        if (imageCommand && imageInput && mediaDialog && mediaLibrary) {
+            let mediaLibraryLoaded = false;
+            let mediaLibraryPage = 1;
+            let mediaLibraryLastPage = 1;
+            let mediaLibraryRequest = null;
+
+            const createMediaOption = (media) => {
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.className = 'media-library-item';
+                option.dataset.mediaSelect = '';
+                option.dataset.mediaUrl = media.url;
+                option.dataset.mediaAlt = media.alt;
+                option.title = `${media.alt}を挿入`;
+
+                const thumbnail = document.createElement('img');
+                thumbnail.src = media.url;
+                thumbnail.alt = '';
+                thumbnail.loading = 'lazy';
+                const name = document.createElement('span');
+                name.textContent = media.alt;
+                const dimensions = document.createElement('small');
+                dimensions.textContent = `${media.width} × ${media.height} px`;
+                option.append(thumbnail, name, dimensions);
+
+                return option;
+            };
+
+            const showLibraryMessage = (title, detail = '') => {
+                const empty = document.createElement('div');
+                empty.className = 'media-library-empty';
+                const heading = document.createElement('strong');
+                heading.textContent = title;
+                empty.append(heading);
+                if (detail) {
+                    const text = document.createElement('span');
+                    text.textContent = detail;
+                    empty.append(text);
+                }
+                mediaLibrary.replaceChildren(empty);
+            };
+
+            const loadMediaLibrary = async (page = 1, append = false) => {
+                mediaLibraryRequest?.abort();
+                const controller = new AbortController();
+                mediaLibraryRequest = controller;
+                mediaLoadMore.disabled = true;
+                if (!append) showLibraryMessage('画像を読み込んでいます。');
+                if (mediaLibraryStatus) mediaLibraryStatus.textContent = '読み込み中';
+
+                try {
+                    const url = new URL(mediaDialog.dataset.libraryUrl, window.location.href);
+                    const query = mediaSearchInput?.value.trim() ?? '';
+                    url.searchParams.set('page', String(page));
+                    if (query) url.searchParams.set('q', query);
+                    const response = await fetch(url, {
+                        headers: { Accept: 'application/json' },
+                        credentials: 'same-origin',
+                        signal: controller.signal,
+                    });
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(payload.message || '画像を読み込めませんでした。');
+
+                    if (!append) mediaLibrary.replaceChildren();
+                    const fragment = document.createDocumentFragment();
+                    payload.data.forEach((media) => fragment.append(createMediaOption(media)));
+                    mediaLibrary.append(fragment);
+
+                    mediaLibraryPage = payload.meta.currentPage;
+                    mediaLibraryLastPage = payload.meta.lastPage;
+                    mediaLibraryLoaded = true;
+                    if (payload.data.length === 0 && !append) {
+                        showLibraryMessage('該当する画像はありません。', '検索条件を変えてお試しください。');
+                    }
+                    if (mediaLibraryStatus) mediaLibraryStatus.textContent = `${payload.meta.total}件の画像`;
+                    mediaLoadMore.hidden = mediaLibraryPage >= mediaLibraryLastPage;
+                } catch (error) {
+                    if (error.name === 'AbortError') return;
+                    if (!append) showLibraryMessage('画像を読み込めませんでした。', '時間をおいて再度お試しください。');
+                    if (mediaLibraryStatus) mediaLibraryStatus.textContent = error instanceof Error ? error.message : '読み込みに失敗しました。';
+                } finally {
+                    if (mediaLibraryRequest === controller) {
+                        mediaLibraryRequest = null;
+                        mediaLoadMore.disabled = false;
+                    }
+                }
+            };
+
+            imageCommand.addEventListener('click', () => {
+                mediaDialog.showModal();
+                if (!mediaLibraryLoaded) loadMediaLibrary();
+            });
             mediaDialogClose?.addEventListener('click', () => mediaDialog.close());
             mediaDialog.addEventListener('click', (event) => {
                 if (event.target === mediaDialog) mediaDialog.close();
@@ -308,18 +373,29 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
                 imageInput.click();
             });
 
-            mediaSelectButtons.forEach((button) => {
-                button.addEventListener('click', () => {
-                    try {
-                        insertMedia({
-                            url: button.dataset.mediaUrl,
-                            alt: button.dataset.mediaAlt,
-                        });
-                        mediaDialog.close();
-                    } catch (error) {
-                        setStatus(error instanceof Error ? error.message : '画像を挿入できませんでした。', 'error');
-                    }
-                });
+            mediaLibrary.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-media-select]');
+                if (!button || !mediaLibrary.contains(button)) return;
+
+                try {
+                    insertMedia({
+                        url: button.dataset.mediaUrl,
+                        alt: button.dataset.mediaAlt,
+                    });
+                    mediaDialog.close();
+                } catch (error) {
+                    setStatus(error instanceof Error ? error.message : '画像を挿入できませんでした。', 'error');
+                }
+            });
+
+            mediaSearchSubmit?.addEventListener('click', () => loadMediaLibrary());
+            mediaSearchInput?.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                loadMediaLibrary();
+            });
+            mediaLoadMore?.addEventListener('click', () => {
+                if (mediaLibraryPage < mediaLibraryLastPage) loadMediaLibrary(mediaLibraryPage + 1, true);
             });
 
             imageInput.addEventListener('change', async () => {
@@ -328,6 +404,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
                     for (const file of files) {
                         const media = await uploadImage(file);
                         insertMedia(media);
+                        mediaLibraryLoaded = false;
                     }
                 } catch (error) {
                     if (error instanceof Error && error.message === '画像の挿入をキャンセルしました。') {

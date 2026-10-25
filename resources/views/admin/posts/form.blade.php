@@ -46,7 +46,7 @@
             </div>
         </div>
 
-        <dialog class="media-dialog" data-media-dialog aria-labelledby="media-dialog-title">
+        <dialog class="media-dialog" data-media-dialog data-library-url="{{ route('admin.media.library') }}" aria-labelledby="media-dialog-title">
             <div class="media-dialog-layout">
                 <header class="media-dialog-header">
                     <div>
@@ -58,30 +58,20 @@
 
                 <div class="media-dialog-actions">
                     <button type="button" class="button primary" data-image-upload-trigger>新しい画像をアップロード</button>
-                    <span>JPEG・PNG・WebP、10MBまで</span>
+                    <div class="media-library-search" data-media-search-form role="search">
+                        <label class="visually-hidden" for="media-library-query">画像を検索</label>
+                        <input id="media-library-query" type="search" maxlength="100" placeholder="代替テキスト・ファイル名で検索" data-media-search>
+                        <button type="button" class="button secondary" data-media-search-submit>検索</button>
+                    </div>
                 </div>
 
-                <div class="media-library" aria-label="アップロード済み画像">
-                    @forelse($mediaItems as $media)
-                        <button
-                            type="button"
-                            class="media-library-item"
-                            data-media-select
-                            data-media-url="{{ asset('storage/'.$media->path) }}"
-                            data-media-alt="{{ $media->alt_text }}"
-                            title="{{ $media->alt_text }}を挿入"
-                        >
-                            <img src="{{ asset('storage/'.$media->path) }}" alt="" loading="lazy">
-                            <span>{{ $media->alt_text }}</span>
-                            <small>{{ $media->width }} × {{ $media->height }} px</small>
-                        </button>
-                    @empty
-                        <div class="media-library-empty">
-                            <strong>アップロード済みの画像はありません</strong>
-                            <span>上のボタンから最初の画像を追加してください。</span>
-                        </div>
-                    @endforelse
+                <div class="media-library" data-media-library aria-label="アップロード済み画像" aria-live="polite">
+                    <div class="media-library-empty"><span>画像ギャラリーを読み込んでいます。</span></div>
                 </div>
+                <footer class="media-library-footer">
+                    <span data-media-library-status role="status"></span>
+                    <button type="button" class="button secondary" data-media-load-more hidden>さらに読み込む</button>
+                </footer>
             </div>
         </dialog>
 

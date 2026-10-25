@@ -51,6 +51,24 @@ class MediaUploadTest extends TestCase
             ->assertJsonValidationErrors('image');
     }
 
+    public function test_authenticated_user_can_search_the_media_library(): void
+    {
+        $user = User::factory()->create(['is_admin' => true]);
+        foreach ([['再利用する力学図', 'mechanics.jpg'], ['別の画像', 'other.jpg']] as [$alt, $name]) {
+            Media::create([
+                'disk' => 'public', 'path' => '2026/10/'.$name, 'original_name' => $name,
+                'mime_type' => 'image/jpeg', 'size' => 1024, 'width' => 640, 'height' => 480,
+                'alt_text' => $alt, 'sha256' => hash('sha256', $name), 'uploaded_by' => $user->id,
+            ]);
+        }
+
+        $this->actingAs($user)->getJson('/admin/media/library?q=力学')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.alt', '再利用する力学図')
+            ->assertJsonPath('meta.total', 1);
+    }
+
     public function test_oversized_post_returns_a_clear_image_upload_error(): void
     {
         $user = User::factory()->create(['is_admin' => true]);

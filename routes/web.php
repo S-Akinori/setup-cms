@@ -26,6 +26,7 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
     Route::resource('categories', CategoryController::class)->except(['create', 'show']);
     Route::resource('comments', CommentController::class)->only(['index', 'update', 'destroy']);
     Route::get('/media', [MediaController::class, 'index'])->name('media.index');
+    Route::get('/media/library', [MediaController::class, 'library'])->name('media.library');
     Route::post('/media', [MediaController::class, 'store'])->name('media.store');
     Route::get('/wordpress-import', [WordPressImportController::class, 'create'])->name('wordpress-import.create');
     Route::post('/wordpress-import', [WordPressImportController::class, 'store'])->name('wordpress-import.store');

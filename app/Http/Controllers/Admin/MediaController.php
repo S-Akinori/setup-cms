@@ -20,6 +20,40 @@ class MediaController extends Controller
         return view('admin.media.index', ['mediaItems' => Media::latest()->paginate(30)->onEachSide(1)]);
     }
 
+    public function library(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $query = trim($data['q'] ?? '');
+        $mediaItems = Media::query()
+            ->when($query !== '', function ($builder) use ($query) {
+                $builder->where(function ($filter) use ($query) {
+                    $filter->where('alt_text', 'like', '%'.$query.'%')
+                        ->orWhere('original_name', 'like', '%'.$query.'%');
+                });
+            })
+            ->latest()
+            ->paginate(24)
+            ->withQueryString();
+
+        return response()->json([
+            'data' => $mediaItems->getCollection()->map(fn (Media $media) => [
+                'id' => $media->id,
+                'url' => asset('storage/'.$media->path),
+                'alt' => $media->alt_text,
+                'width' => $media->width,
+                'height' => $media->height,
+            ])->values(),
+            'meta' => [
+                'currentPage' => $mediaItems->currentPage(),
+                'lastPage' => $mediaItems->lastPage(),
+                'total' => $mediaItems->total(),
+            ],
+        ]);
+    }
+
     public function store(Request $request, ImageSanitizer $sanitizer): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
