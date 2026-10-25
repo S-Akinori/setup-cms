@@ -49,6 +49,13 @@ class PostManagementTest extends TestCase
 
         $this->actingAs($admin)->post('/admin/posts', $base + ['body_markdown' => "```html\n<div>example</div>\n```"])
             ->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->post('/admin/posts', [
+            'title' => 'Autolink test',
+            'slug' => 'autolink-test',
+            'body_markdown' => '<https://example.com/articles/physics>',
+            'status' => 'draft',
+        ])->assertSessionHasNoErrors();
     }
 
     public function test_editor_empty_line_placeholders_are_normalized_before_validation(): void

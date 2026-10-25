@@ -35,6 +35,7 @@ const mediaDialogClose = document.querySelector('[data-media-dialog-close]');
 const imageUploadTrigger = document.querySelector('[data-image-upload-trigger]');
 const mediaSelectButtons = document.querySelectorAll('[data-media-select]');
 const commandButtons = document.querySelectorAll('[data-markdown-command]');
+const standaloneUrlPattern = /^https?:\/\/[^\s<>]+$/i;
 
 const normalizeMarkdown = (markdown) => {
     const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
@@ -59,6 +60,10 @@ const normalizeMarkdown = (markdown) => {
 
         if (fenceCharacter === null && /^[ \t]{0,3}<br\s*\/?>[ \t]*$/i.test(line)) {
             return '';
+        }
+
+        if (fenceCharacter === null && standaloneUrlPattern.test(line.trim())) {
+            return `<${line.trim()}>`;
         }
 
         return line;
@@ -211,6 +216,41 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         commandButtons.forEach((button) => { button.disabled = false; });
         if (imageCommand) imageCommand.disabled = false;
 
+        const proseMirror = editorRoot.querySelector('.ProseMirror');
+        const decorateStandaloneUrls = () => {
+            proseMirror?.querySelectorAll('p').forEach((paragraph) => {
+                const value = paragraph.textContent?.trim() ?? '';
+                const isStandaloneUrl = standaloneUrlPattern.test(value);
+                paragraph.classList.toggle('standalone-link-card', isStandaloneUrl);
+
+                if (!isStandaloneUrl) {
+                    delete paragraph.dataset.linkHost;
+                    return;
+                }
+
+                try {
+                    paragraph.dataset.linkHost = new URL(value).hostname.replace(/^www\./i, '');
+                } catch {
+                    paragraph.classList.remove('standalone-link-card');
+                    delete paragraph.dataset.linkHost;
+                }
+            });
+        };
+        let decorationFrame = null;
+        const scheduleStandaloneUrlDecoration = () => {
+            if (decorationFrame !== null) return;
+            decorationFrame = window.requestAnimationFrame(() => {
+                decorationFrame = null;
+                decorateStandaloneUrls();
+            });
+        };
+        const linkCardObserver = new MutationObserver(scheduleStandaloneUrlDecoration);
+        if (proseMirror) {
+            linkCardObserver.observe(proseMirror, { childList: true, subtree: true, characterData: true });
+            decorateStandaloneUrls();
+            window.addEventListener('pagehide', () => linkCardObserver.disconnect(), { once: true });
+        }
+
         const commands = {
             h2: () => crepe.editor.action(callCommand(wrapInHeadingCommand.key, 2)),
             h3: () => crepe.editor.action(callCommand(wrapInHeadingCommand.key, 3)),
@@ -229,7 +269,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
                 title: '',
             }));
             markdownField.value = normalizeMarkdown(crepe.getMarkdown());
-            editorRoot.querySelector('.ProseMirror')?.focus();
+            proseMirror?.focus();
             setStatus('画像を本文へ挿入しました。', 'success');
         };
 
@@ -282,14 +322,16 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
             });
         }
 
-        markdownField.closest('form')?.addEventListener('submit', (event) => {
+        const editorForm = markdownField.closest('form');
+        editorForm?.addEventListener('submit', (event) => {
             markdownField.value = normalizeMarkdown(crepe.getMarkdown()).trim();
             if (!markdownField.value) {
                 event.preventDefault();
                 setStatus('本文を入力してください。', 'error');
-                editorRoot.querySelector('.ProseMirror')?.focus();
+                proseMirror?.focus();
             }
         });
+        editorForm?.dispatchEvent(new CustomEvent('cms:editor-ready'));
     }).catch((error) => {
         console.error('Markdown editor initialization failed.', error);
         editorRoot.hidden = true;
@@ -462,5 +504,68 @@ if (wordpressImportForm && wordpressImportSubmit && wordpressImportStatus) {
         wordpressImportSubmit.disabled = true;
         wordpressImportSubmit.textContent = '処理中…';
         wordpressImportStatus.hidden = false;
+    });
+}
+
+const unsavedChangesForm = document.querySelector('[data-unsaved-changes-form]');
+if (unsavedChangesForm) {
+    const leaveMessage = '変更が保存されていません。このページを移動しますか？';
+    let allowNavigation = false;
+
+    const formSnapshot = () => Array.from(unsavedChangesForm.elements).map((field) => {
+        if (!field.name || field.disabled || ['submit', 'button', 'reset'].includes(field.type)) return null;
+
+        if (field.type === 'checkbox' || field.type === 'radio') {
+            return [field.name, field.value, field.checked];
+        }
+
+        if (field.type === 'file') {
+            return [field.name, Array.from(field.files ?? []).map((file) => [file.name, file.size, file.lastModified])];
+        }
+
+        if (field instanceof HTMLSelectElement && field.multiple) {
+            return [field.name, Array.from(field.selectedOptions).map((option) => option.value)];
+        }
+
+        return [field.name, field.value];
+    }).filter(Boolean);
+
+    let initialSnapshot = JSON.stringify(formSnapshot());
+    const hasUnsavedChanges = () => !allowNavigation && JSON.stringify(formSnapshot()) !== initialSnapshot;
+
+    unsavedChangesForm.addEventListener('cms:editor-ready', () => {
+        initialSnapshot = JSON.stringify(formSnapshot());
+    });
+
+    unsavedChangesForm.addEventListener('formdata', () => {
+        allowNavigation = true;
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+        if (!hasUnsavedChanges()) return;
+        event.preventDefault();
+        event.returnValue = '';
+    });
+
+    document.addEventListener('click', (event) => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+        const link = event.target.closest('a[href]');
+        if (!link || link.target === '_blank' || link.hasAttribute('download')) return;
+
+        const destination = new URL(link.href, window.location.href);
+        if (!['http:', 'https:'].includes(destination.protocol)) return;
+
+        const current = new URL(window.location.href);
+        if (destination.origin === current.origin && destination.pathname === current.pathname && destination.search === current.search) return;
+        if (!hasUnsavedChanges()) return;
+
+        if (!window.confirm(leaveMessage)) {
+            event.preventDefault();
+            return;
+        }
+
+        allowNavigation = true;
+        window.setTimeout(() => { allowNavigation = false; }, 0);
     });
 }

@@ -38,7 +38,7 @@
             </div>
 
             <div class="editor-foot">
-                <p class="editor-help">先頭で「## 」「- 」などを入力すると、その場で見出しやリストへ切り替わります。画像はドラッグ＆ドロップにも対応しています。</p>
+                <p class="editor-help">先頭で「## 」「- 」などを入力すると、その場で表示が切り替わります。画像のドラッグ＆ドロップと、URL単独行のリンクカード表示に対応しています。</p>
                 <p class="upload-status" data-upload-status role="status" aria-live="polite"></p>
             </div>
         </div>

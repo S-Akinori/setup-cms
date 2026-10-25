@@ -54,6 +54,7 @@ class AdminAccessTest extends TestCase
 
         $this->actingAs($user)->get('/admin/posts/create')
             ->assertOk()
+            ->assertSee('data-unsaved-changes-form', false)
             ->assertSee('data-rich-markdown-editor', false)
             ->assertSee('data-markdown', false)
             ->assertSee('data-markdown-command="h2"', false)
