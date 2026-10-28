@@ -41,7 +41,7 @@
             </div>
 
             <div class="editor-foot">
-                <p class="editor-help">Markdown、画像、URLカードに加え、ツールバーからボタンと囲いボックスを挿入できます。</p>
+                <p class="editor-help">Markdownと画像に加え、ツールバーやスラッシュコマンドからボタンと囲いを挿入できます。</p>
                 <p class="upload-status" data-upload-status role="status" aria-live="polite"></p>
             </div>
         </div>

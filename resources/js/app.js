@@ -9,8 +9,10 @@ import { linkTooltip } from '@milkdown/crepe/feature/link-tooltip';
 import { listItem } from '@milkdown/crepe/feature/list-item';
 import { placeholder } from '@milkdown/crepe/feature/placeholder';
 import { toolbar } from '@milkdown/crepe/feature/toolbar';
+import { commandsCtx } from '@milkdown/kit/core';
 import { callCommand, insert } from '@milkdown/kit/utils';
 import {
+    clearTextInCurrentBlockCommand,
     insertImageCommand,
     wrapInBulletListCommand,
     wrapInHeadingCommand,
@@ -41,6 +43,35 @@ const mediaLoadMore = document.querySelector('[data-media-load-more]');
 const commandButtons = document.querySelectorAll('[data-markdown-command]');
 const contentCommandButtons = document.querySelectorAll('[data-content-command]');
 const standaloneUrlPattern = /^https?:\/\/[^\s<>]+$/i;
+const contentTemplates = {
+    button: '[ボタンの文字](https://example.com "cms-button:primary")',
+    box: '> **ポイント**\n>\n> ここに内容を入力してください。',
+};
+const contentCommandIcons = {
+    button: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M8 12h8"></path><path d="m14 10 2 2-2 2"></path></svg>',
+    box: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M7 9h10"></path><path d="M7 13h7"></path></svg>',
+};
+
+const addContentSlashCommands = (builder) => {
+    const group = builder.addGroup('cms-content', 'CMS');
+    group
+        .addItem('cms-button', {
+            label: 'ボタン',
+            icon: contentCommandIcons.button,
+            onRun: (ctx) => {
+                ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+                insert(contentTemplates.button)(ctx);
+            },
+        })
+        .addItem('cms-box', {
+            label: '囲い',
+            icon: contentCommandIcons.box,
+            onRun: (ctx) => {
+                ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+                insert(contentTemplates.box)(ctx);
+            },
+        });
+};
 
 const normalizeMarkdown = (markdown) => {
     const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
@@ -65,6 +96,11 @@ const normalizeMarkdown = (markdown) => {
 
         if (fenceCharacter === null && /^[ \t]{0,3}<br\s*\/?>[ \t]*$/i.test(line)) {
             return '';
+        }
+
+        if (fenceCharacter === null) {
+            const legacyBoxTitle = line.match(/^([ \t]*>[ \t]*)\[([^\]]+)\]\(#[ \t]+"cms-box:info"\)[ \t]*$/);
+            if (legacyBoxTitle) return legacyBoxTitle[1] + '**' + legacyBoxTitle[2] + '**';
         }
 
         if (fenceCharacter === null && standaloneUrlPattern.test(line.trim())) {
@@ -202,7 +238,9 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
             inlineConfirmButton: '挿入',
             inlineUploadPlaceholderText: '画像URLを入力、または画像を選択',
         })
-        .addFeature(blockEdit)
+        .addFeature(blockEdit, {
+            buildMenu: addContentSlashCommands,
+        })
         .addFeature(toolbar)
         .addFeature(placeholder, {
             text: '本文を入力してください。Markdown記法とLaTeXが使えます。',
@@ -225,6 +263,12 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         if (imageCommand) imageCommand.disabled = false;
 
         const proseMirror = editorRoot.querySelector('.ProseMirror');
+        const preventEditorLinkNavigation = (event) => {
+            const link = event.target instanceof Element ? event.target.closest('a') : null;
+            if (link && editorRoot.contains(link)) event.preventDefault();
+        };
+        editorRoot.addEventListener('click', preventEditorLinkNavigation, true);
+        editorRoot.addEventListener('auxclick', preventEditorLinkNavigation, true);
 
         const commands = {
             h2: () => crepe.editor.action(callCommand(wrapInHeadingCommand.key, 2)),
@@ -256,10 +300,6 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
             });
         });
 
-        const contentTemplates = {
-            button: '[ボタンの文字](https://example.com "cms-button:primary")',
-            box: '> [ポイント](# "cms-box:info")\n>\n> ここに内容を入力してください。',
-        };
         contentCommandButtons.forEach((button) => {
             button.addEventListener('mousedown', (event) => event.preventDefault());
             button.addEventListener('click', () => {
