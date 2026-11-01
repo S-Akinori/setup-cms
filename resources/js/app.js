@@ -10,7 +10,7 @@ import { listItem } from '@milkdown/crepe/feature/list-item';
 import { placeholder } from '@milkdown/crepe/feature/placeholder';
 import { toolbar } from '@milkdown/crepe/feature/toolbar';
 import { commandsCtx } from '@milkdown/kit/core';
-import { callCommand, insert } from '@milkdown/kit/utils';
+import { callCommand, insert, replaceAll } from '@milkdown/kit/utils';
 import {
     clearTextInCurrentBlockCommand,
     insertImageCommand,
@@ -40,6 +40,9 @@ const mediaSearchInput = document.querySelector('[data-media-search]');
 const mediaSearchSubmit = document.querySelector('[data-media-search-submit]');
 const mediaLibraryStatus = document.querySelector('[data-media-library-status]');
 const mediaLoadMore = document.querySelector('[data-media-load-more]');
+const markdownFileTrigger = document.querySelector('[data-markdown-file-trigger]');
+const markdownFileInput = document.querySelector('[data-markdown-file-input]');
+const markdownExport = document.querySelector('[data-markdown-export]');
 const commandButtons = document.querySelectorAll('[data-markdown-command]');
 const contentCommandButtons = document.querySelectorAll('[data-content-command]');
 const standaloneUrlPattern = /^https?:\/\/[^\s<>]+$/i;
@@ -50,6 +53,7 @@ const contentTemplates = {
 const contentCommandIcons = {
     button: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M8 12h8"></path><path d="m14 10 2 2-2 2"></path></svg>',
     box: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M7 9h10"></path><path d="M7 13h7"></path></svg>',
+    gallery: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9" r="1.5"></circle><path d="m5.5 17 4-4 3 3 2.5-2.5 3.5 3.5"></path></svg>',
 };
 
 const addContentSlashCommands = (builder) => {
@@ -69,6 +73,14 @@ const addContentSlashCommands = (builder) => {
             onRun: (ctx) => {
                 ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
                 insert(contentTemplates.box)(ctx);
+            },
+        })
+        .addItem('cms-media-library', {
+            label: '画像ギャラリー',
+            icon: contentCommandIcons.gallery,
+            onRun: (ctx) => {
+                ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+                window.requestAnimationFrame(() => imageCommand?.click());
             },
         });
 };
@@ -109,6 +121,21 @@ const normalizeMarkdown = (markdown) => {
 
         return line;
     }).join('\n');
+};
+
+const markdownFileName = (title) => {
+    const sanitized = title
+        .normalize('NFKC')
+        .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
+        .replace(/\s+/g, ' ')
+        .replace(/[. ]+$/g, '')
+        .trim()
+        .slice(0, 100);
+    const baseName = sanitized && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(sanitized)
+        ? sanitized
+        : 'article';
+
+    return `${baseName}.md`;
 };
 
 if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && altInput && altConfirm && altCancel) {
@@ -261,6 +288,8 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         commandButtons.forEach((button) => { button.disabled = false; });
         contentCommandButtons.forEach((button) => { button.disabled = false; });
         if (imageCommand) imageCommand.disabled = false;
+        if (markdownFileTrigger) markdownFileTrigger.disabled = false;
+        if (markdownExport) markdownExport.disabled = false;
 
         const proseMirror = editorRoot.querySelector('.ProseMirror');
         const preventEditorLinkNavigation = (event) => {
@@ -269,6 +298,82 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         };
         editorRoot.addEventListener('click', preventEditorLinkNavigation, true);
         editorRoot.addEventListener('auxclick', preventEditorLinkNavigation, true);
+
+        if (markdownFileTrigger && markdownFileInput) {
+            const maxMarkdownFileSize = 1024 * 1024;
+
+            markdownFileTrigger.addEventListener('mousedown', (event) => event.preventDefault());
+            markdownFileTrigger.addEventListener('click', () => markdownFileInput.click());
+            markdownFileInput.addEventListener('change', async () => {
+                const [file] = markdownFileInput.files ?? [];
+                if (!file) return;
+
+                try {
+                    const extension = file.name.split('.').pop()?.toLowerCase();
+                    if (!['md', 'markdown'].includes(extension ?? '')) {
+                        throw new Error('拡張子が .md または .markdown のファイルを選択してください。');
+                    }
+                    if (file.size === 0) {
+                        throw new Error('空のMarkdownファイルは読み込めません。');
+                    }
+                    if (file.size > maxMarkdownFileSize) {
+                        throw new Error('Markdownファイルは1MB以下にしてください。');
+                    }
+
+                    const currentMarkdown = normalizeMarkdown(crepe.getMarkdown()).trim();
+                    const shouldReplace = !currentMarkdown || window.confirm(
+                        '現在の本文を「' + file.name + '」の内容で置き換えます。よろしいですか？',
+                    );
+                    if (!shouldReplace) {
+                        setStatus('Markdownファイルの読み込みをキャンセルしました。');
+                        return;
+                    }
+
+                    setStatus('Markdownファイルを読み込んでいます。', 'loading');
+                    const fileMarkdown = (await file.text()).replace(/^\uFEFF/, '');
+                    if (fileMarkdown.includes('\0')) {
+                        throw new Error('テキスト形式のMarkdownファイルを選択してください。');
+                    }
+                    if (!fileMarkdown.trim()) {
+                        throw new Error('空のMarkdownファイルは読み込めません。');
+                    }
+
+                    const normalizedMarkdown = normalizeMarkdown(fileMarkdown);
+                    crepe.editor.action(replaceAll(normalizedMarkdown));
+                    markdownField.value = normalizedMarkdown;
+                    markdownField.dispatchEvent(new Event('input', { bubbles: true }));
+                    proseMirror?.focus();
+                    setStatus('「' + file.name + '」を本文へ読み込みました。', 'success');
+                } catch (error) {
+                    setStatus(error instanceof Error ? error.message : 'Markdownファイルを読み込めませんでした。', 'error');
+                } finally {
+                    markdownFileInput.value = '';
+                }
+            });
+        }
+
+        markdownExport?.addEventListener('click', () => {
+            const markdown = normalizeMarkdown(crepe.getMarkdown()).trim();
+            if (!markdown) {
+                setStatus('出力する本文がありません。', 'error');
+                proseMirror?.focus();
+                return;
+            }
+
+            const titleField = document.querySelector('[data-title]');
+            const fileName = markdownFileName(titleField?.value ?? '');
+            const blob = new Blob([`${markdown}\n`], { type: 'text/markdown;charset=utf-8' });
+            const objectUrl = URL.createObjectURL(blob);
+            const downloadLink = document.createElement('a');
+            downloadLink.href = objectUrl;
+            downloadLink.download = fileName;
+            downloadLink.hidden = true;
+            document.body.append(downloadLink);
+            downloadLink.click();
+            downloadLink.remove();
+            URL.revokeObjectURL(objectUrl);
+            setStatus(`「${fileName}」を出力しました。`, 'success');
+        });
 
         const commands = {
             h2: () => crepe.editor.action(callCommand(wrapInHeadingCommand.key, 2)),

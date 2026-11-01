@@ -27,11 +27,21 @@
                 <button type="button" class="toolbar-button" data-content-command="button" title="リンクボタンを挿入" disabled>ボタン</button>
                 <button type="button" class="toolbar-button" data-content-command="box" title="囲いボックスを挿入" disabled>囲い</button>
                 <span class="toolbar-divider" aria-hidden="true"></span>
-                <button type="button" class="toolbar-button image-command" data-image-command title="画像を選択して挿入" disabled>
+                <button type="button" class="toolbar-button image-command" data-image-command title="画像ギャラリーから選択・アップロード" disabled>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4zM7 15l3.2-3.2 2.5 2.5 1.8-1.8L18 16M8.5 9a1.25 1.25 0 1 0 0 .01"/></svg>
-                    画像
+                    画像ギャラリー
                 </button>
                 <input class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" multiple data-image-input tabindex="-1">
+                <span class="toolbar-divider" aria-hidden="true"></span>
+                <button type="button" class="toolbar-button" data-markdown-file-trigger title="Markdownファイルを読み込む" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6zM14 3.5v4h4M9 12l3 3 3-3M12 8v7"/></svg>
+                    MD読込
+                </button>
+                <input class="visually-hidden" type="file" accept=".md,.markdown,text/markdown" data-markdown-file-input tabindex="-1">
+                <button type="button" class="toolbar-button" data-markdown-export title="現在の本文をMarkdownファイルで出力" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6zM14 3.5v4h4M9 13l3 3 3-3M12 9v7"/></svg>
+                    MD出力
+                </button>
             </div>
 
             <div class="markdown-editor-shell" data-upload-url="{{ route('admin.media.store') }}">
@@ -41,7 +51,7 @@
             </div>
 
             <div class="editor-foot">
-                <p class="editor-help">Markdownと画像に加え、ツールバーやスラッシュコマンドからボタンと囲いを挿入できます。</p>
+                <p class="editor-help">Markdownファイルの読み込み・出力、画像ギャラリー・ボタン・囲いの挿入に対応しています。</p>
                 <p class="upload-status" data-upload-status role="status" aria-live="polite"></p>
             </div>
         </div>
