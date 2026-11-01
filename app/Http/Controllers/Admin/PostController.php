@@ -14,10 +14,13 @@ use App\Services\BuildDispatcher;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 class PostController extends Controller
 {
@@ -41,6 +44,85 @@ class PostController extends Controller
     public function create(Request $request): View
     {
         return view('admin.posts.create', $this->formData($this->contentType($request)));
+    }
+
+    public function exportMarkdown(Request $request): StreamedResponse|RedirectResponse
+    {
+        $contentType = $this->contentType($request);
+        $validated = $request->validate([
+            'post_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'post_ids.*' => [
+                'required',
+                'string',
+                'distinct',
+                Rule::exists('posts', 'id')
+                    ->where('content_type', $contentType)
+                    ->whereNull('deleted_at'),
+            ],
+        ], [
+            'post_ids.required' => '出力する'.($contentType === 'page' ? '固定ページ' : '記事').'を選択してください。',
+            'post_ids.array' => '選択内容が正しくありません。',
+            'post_ids.min' => '出力する'.($contentType === 'page' ? '固定ページ' : '記事').'を選択してください。',
+            'post_ids.max' => '一度に出力できるのは100件までです。',
+            'post_ids.*.exists' => '選択した項目に出力できないデータが含まれています。',
+            'post_ids.*.distinct' => '同じ項目が複数回選択されています。',
+        ]);
+
+        if (! class_exists(ZipArchive::class)) {
+            return back()->withErrors(['post_ids' => 'Markdownの一括出力にはPHPのZIP拡張が必要です。']);
+        }
+
+        $ids = collect($validated['post_ids']);
+        $posts = Post::query()
+            ->where('content_type', $contentType)
+            ->whereIn('id', $ids)
+            ->get(['id', 'slug', 'body_markdown'])
+            ->keyBy('id');
+
+        $directory = storage_path('app/private/exports');
+        File::ensureDirectoryExists($directory);
+        $temporaryPath = tempnam($directory, 'markdown-');
+        if ($temporaryPath === false) {
+            return back()->withErrors(['post_ids' => '一時ファイルを作成できませんでした。サーバーの書き込み権限を確認してください。']);
+        }
+
+        $zip = new ZipArchive;
+        if ($zip->open($temporaryPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            File::delete($temporaryPath);
+
+            return back()->withErrors(['post_ids' => 'Markdown ZIPを作成できませんでした。']);
+        }
+
+        foreach ($ids as $id) {
+            $post = $posts->get($id);
+            if (! $post) {
+                continue;
+            }
+
+            $markdown = rtrim(str_replace(["\r\n", "\r"], "\n", $post->body_markdown))."\n";
+            $zip->addFromString($post->slug.'.md', $markdown);
+        }
+        $zip->close();
+
+        $prefix = $contentType === 'page' ? 'pages' : 'posts';
+        $downloadName = $prefix.'-markdown-'.now()->format('Ymd-His').'.zip';
+
+        return response()->streamDownload(function () use ($temporaryPath) {
+            try {
+                $handle = fopen($temporaryPath, 'rb');
+                if ($handle !== false) {
+                    try {
+                        fpassthru($handle);
+                    } finally {
+                        fclose($handle);
+                    }
+                }
+            } finally {
+                File::delete($temporaryPath);
+            }
+        }, $downloadName, [
+            'Content-Type' => 'application/zip',
+        ]);
     }
 
     public function store(Request $request): RedirectResponse

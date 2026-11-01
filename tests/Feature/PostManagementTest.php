@@ -8,6 +8,7 @@ use App\Models\Post;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
+use ZipArchive;
 
 class PostManagementTest extends TestCase
 {
@@ -124,7 +125,42 @@ class PostManagementTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin/posts')
             ->assertOk()
+            ->assertSee('data-bulk-markdown-form', false)
+            ->assertSee('name="post_ids[]"', false)
+            ->assertSee('選択記事をMD出力')
             ->assertSeeInOrder(['新しい記事', '古い記事']);
+    }
+
+    public function test_admin_can_export_selected_articles_as_markdown_zip(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $first = Post::create(['title' => '力学', 'slug' => 'mechanics', 'body_markdown' => "# 力学\r\n\r\n本文", 'status' => 'draft', 'author_id' => $admin->id]);
+        $second = Post::create(['title' => '電磁気', 'slug' => 'electromagnetism', 'body_markdown' => '# 電磁気', 'status' => 'published', 'published_at' => now(), 'author_id' => $admin->id]);
+
+        $response = $this->actingAs($admin)->post('/admin/posts/export-markdown', [
+            'post_ids' => [$second->id, $first->id],
+        ]);
+
+        $response->assertOk()->assertDownload();
+        $zipPath = tempnam(sys_get_temp_dir(), 'markdown-export-test-');
+        file_put_contents($zipPath, $response->streamedContent());
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($zipPath));
+        $this->assertSame("# 電磁気\n", $zip->getFromName('electromagnetism.md'));
+        $this->assertSame("# 力学\n\n本文\n", $zip->getFromName('mechanics.md'));
+        $zip->close();
+        @unlink($zipPath);
+    }
+
+    public function test_markdown_export_rejects_an_unselected_or_wrong_content_type(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $page = Post::create(['content_type' => 'page', 'title' => '固定ページ', 'slug' => 'about', 'body_markdown' => '本文', 'status' => 'draft', 'author_id' => $admin->id]);
+
+        $this->actingAs($admin)->post('/admin/posts/export-markdown')
+            ->assertSessionHasErrors('post_ids');
+        $this->actingAs($admin)->post('/admin/posts/export-markdown', ['post_ids' => [$page->id]])
+            ->assertSessionHasErrors('post_ids.0');
     }
 
     public function test_article_pagination_uses_the_admin_layout(): void

@@ -746,6 +746,47 @@ if (wordpressImportForm && wordpressImportSubmit && wordpressImportStatus) {
     });
 }
 
+document.querySelectorAll('[data-bulk-markdown-form]').forEach((form) => {
+    const selectAll = form.querySelector('[data-bulk-select-all]');
+    const items = Array.from(form.querySelectorAll('[data-bulk-markdown-item]'));
+    const submit = form.querySelector('[data-bulk-markdown-submit]');
+    const selectedCount = form.querySelector('[data-bulk-selected-count]');
+
+    const updateSelection = () => {
+        const count = items.filter((item) => item.checked).length;
+        if (selectAll) {
+            selectAll.checked = items.length > 0 && count === items.length;
+            selectAll.indeterminate = count > 0 && count < items.length;
+        }
+        if (submit) submit.disabled = count === 0;
+        if (selectedCount) selectedCount.textContent = `${count}件選択`;
+    };
+
+    selectAll?.addEventListener('change', () => {
+        items.forEach((item) => { item.checked = selectAll.checked; });
+        updateSelection();
+    });
+    items.forEach((item) => item.addEventListener('change', updateSelection));
+    form.addEventListener('submit', (event) => {
+        const count = items.filter((item) => item.checked).length;
+        if (count === 0) {
+            event.preventDefault();
+            updateSelection();
+            return;
+        }
+        if (submit) {
+            const originalLabel = submit.textContent;
+            submit.disabled = true;
+            submit.textContent = 'ZIPを作成中…';
+            window.setTimeout(() => {
+                submit.textContent = originalLabel;
+                updateSelection();
+            }, 1500);
+        }
+    });
+    updateSelection();
+});
+
 const unsavedChangesForm = document.querySelector('[data-unsaved-changes-form]');
 if (unsavedChangesForm) {
     const leaveMessage = '変更が保存されていません。このページを移動しますか？';

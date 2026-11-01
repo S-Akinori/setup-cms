@@ -19,8 +19,10 @@ Route::middleware('auth')->group(function () {
 
 Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
     Route::get('/', fn () => redirect()->route('admin.posts.index'))->name('dashboard');
+    Route::post('/posts/export-markdown', [PostController::class, 'exportMarkdown'])->name('posts.export-markdown');
     Route::resource('posts', PostController::class)->except('show');
     Route::post('/posts/{post}/revisions/{revision}/restore', [PostController::class, 'restoreRevision'])->name('posts.revisions.restore');
+    Route::post('/pages/export-markdown', [PostController::class, 'exportMarkdown'])->name('pages.export-markdown');
     Route::resource('pages', PostController::class)->parameters(['pages' => 'post'])->except('show');
     Route::post('/pages/{post}/revisions/{revision}/restore', [PostController::class, 'restoreRevision'])->name('pages.revisions.restore');
     Route::resource('categories', CategoryController::class)->except(['create', 'show']);
