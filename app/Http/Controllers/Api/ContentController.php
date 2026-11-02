@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Post;
 use App\Models\Tag;
+use App\Services\ContentPasswordGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\CursorPaginator;
@@ -32,17 +33,11 @@ class ContentController extends Controller
             ->header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     }
 
-    public function post(string $slug, Request $request): JsonResponse
+    public function post(string $slug, Request $request, ContentPasswordGuard $passwordGuard): JsonResponse
     {
         $post = Post::articles()->published()->where('slug', $slug)->with(['author:id,name', 'category:id,name,slug', 'tags:id,name,slug', 'featuredImage'])->firstOrFail();
-        $etag = '"'.hash('sha256', $post->updated_at->toISOString().':'.$post->lock_version).'"';
-        if ($request->header('If-None-Match') === $etag) {
-            return response()->json(null, 304)->header('ETag', $etag);
-        }
 
-        return response()->json(['data' => $this->serialize($post)])
-            ->header('ETag', $etag)->header('Last-Modified', $post->updated_at->toRfc7231String())
-            ->header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+        return $this->detailResponse($post, $request, $passwordGuard);
     }
 
     public function pages(Request $request): JsonResponse
@@ -63,22 +58,27 @@ class ContentController extends Controller
             ->header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     }
 
-    public function page(string $slug, Request $request): JsonResponse
+    public function page(string $slug, Request $request, ContentPasswordGuard $passwordGuard): JsonResponse
     {
         $page = Post::pages()->published()->where('slug', $slug)->with(['author:id,name', 'category:id,name,slug', 'featuredImage'])->firstOrFail();
-        $etag = '"'.hash('sha256', $page->updated_at->toISOString().':'.$page->lock_version).'"';
-        if ($request->header('If-None-Match') === $etag) {
-            return response()->json(null, 304)->header('ETag', $etag);
-        }
 
-        return response()->json(['data' => $this->serialize($page)])
-            ->header('ETag', $etag)->header('Last-Modified', $page->updated_at->toRfc7231String())
-            ->header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+        return $this->detailResponse($page, $request, $passwordGuard);
     }
 
     public function manifest(): JsonResponse
     {
-        return response()->json(['data' => Post::published()->orderByDesc('published_at')->orderByDesc('id')->get(['id', 'content_type', 'slug', 'updated_at', 'published_at'])])
+        $content = Post::published()->orderByDesc('published_at')->orderByDesc('id')
+            ->get(['id', 'content_type', 'slug', 'updated_at', 'published_at', 'access_password'])
+            ->map(fn (Post $post) => [
+                'id' => $post->id,
+                'content_type' => $post->content_type,
+                'slug' => $post->slug,
+                'updated_at' => $post->updated_at,
+                'published_at' => $post->published_at,
+                'passwordProtected' => $post->isPasswordProtected(),
+            ]);
+
+        return response()->json(['data' => $content])
             ->header('Cache-Control', 'public, max-age=60');
     }
 
@@ -110,19 +110,41 @@ class ContentController extends Controller
         ];
     }
 
-    private function serialize(Post $post): array
+    private function detailResponse(Post $post, Request $request, ContentPasswordGuard $passwordGuard): JsonResponse
     {
+        $passwordGuard->ensureAccess($post, $request);
+        $etag = '"'.hash('sha256', $post->updated_at->toISOString().':'.$post->lock_version).'"';
+        $cacheControl = $post->isPasswordProtected()
+            ? 'private, no-store'
+            : 'public, max-age=60, stale-while-revalidate=300';
+
+        if ($request->header('If-None-Match') === $etag) {
+            return response()->json(null, 304)->header('ETag', $etag)->header('Cache-Control', $cacheControl);
+        }
+
+        return response()->json(['data' => $this->serialize($post, true)])
+            ->header('ETag', $etag)
+            ->header('Last-Modified', $post->updated_at->toRfc7231String())
+            ->header('Cache-Control', $cacheControl);
+    }
+
+    private function serialize(Post $post, bool $includeProtectedBody = false): array
+    {
+        $passwordProtected = $post->isPasswordProtected();
+
         return [
             'id' => $post->id, 'slug' => $post->slug, 'title' => $post->title,
             'type' => $post->content_type,
+            'passwordProtected' => $passwordProtected,
             'commentsEnabled' => $post->comments_enabled,
-            'description' => $post->description, 'bodyMarkdown' => $post->body_markdown,
+            'description' => $post->description,
+            'bodyMarkdown' => $passwordProtected && ! $includeProtectedBody ? null : $post->body_markdown,
             'publishedAt' => $post->published_at?->toISOString(), 'updatedAt' => $post->updated_at->toISOString(),
             'author' => $post->author?->only(['name']),
             'category' => $post->category?->only(['name', 'slug']),
             'tags' => $post->content_type === 'post' ? $post->tags->map->only(['name', 'slug'])->values() : [],
             'featuredImage' => $post->featuredImage ? ['url' => asset('storage/'.$post->featuredImage->path), 'alt' => $post->featuredImage->alt_text, 'width' => $post->featuredImage->width, 'height' => $post->featuredImage->height] : null,
-            'seo' => ['title' => $post->seo_title, 'description' => $post->seo_description, 'canonicalUrl' => $post->canonical_url, 'noindex' => $post->noindex],
+            'seo' => ['title' => $post->seo_title, 'description' => $post->seo_description, 'canonicalUrl' => $post->canonical_url, 'noindex' => $post->noindex || $passwordProtected],
         ];
     }
 }

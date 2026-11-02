@@ -579,6 +579,19 @@ export default defineConfig({
 
 本文はエディタ内でMarkdown表示とプレビューが切り替わります。H2、H3、箇条書き、番号付きリスト、画像、ボタン、囲いボックスはツールバーから挿入できます。
 
+### 限定公開記事
+
+記事設定の「限定公開パスワード」へ8文字以上のパスワードを設定すると、記事一覧APIでは本文が`null`になり、詳細APIは正しいパスワードがない限りHTTP 401を返します。パスワードはハッシュ化して保存され、管理画面やAPIに平文・ハッシュ値を表示しません。編集時に空欄のまま保存すると現在のパスワードを維持し、「パスワード保護を解除する」を選ぶと通常公開へ戻ります。
+
+詳細APIとコメントAPIでは、読者が入力したパスワードを`X-Content-Password`ヘッダーで送ります。
+
+```http
+GET /api/v1/posts/example-slug
+X-Content-Password: reader-password
+```
+
+限定公開記事の成功レスポンスは`Cache-Control: private, no-store`です。Astroの静的ビルドへ限定本文を埋め込むとパスワードなしで閲覧できてしまうため、限定公開ページはSSRまたはサーバー側APIルートで取得してください。通信には必ずHTTPSを使用します。実装例は[docs/astro-integration.md](docs/astro-integration.md)を参照してください。
+
 ### ボタンと囲いボックス
 
 ボタンは、リンクのtitleへ`cms-button:primary`または`cms-button:secondary`を指定します。

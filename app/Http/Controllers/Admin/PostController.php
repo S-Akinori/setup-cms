@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -133,6 +134,7 @@ class PostController extends Controller
             $data['content_type'] = $contentType;
             $data['author_id'] = $request->user()->id;
             $data['category_id'] = $data['category_id'] ?? null;
+            $this->applyAccessPassword($data);
             unset($data['tags'], $data['lock_version']);
             $this->normalizeDates($data);
             $post = Post::create($data);
@@ -167,6 +169,7 @@ class PostController extends Controller
         $data = $this->validated($request, $post);
         $expectedVersion = (int) $data['lock_version'];
         $wasPublished = $post->status === 'published';
+        $this->applyAccessPassword($data, true);
 
         DB::transaction(function () use ($request, $post, $data, $expectedVersion, $contentType) {
             if ((int) $post->lock_version !== $expectedVersion) {
@@ -252,7 +255,16 @@ class PostController extends Controller
             'canonical_url' => ['nullable', 'url:http,https', 'max:2048'],
             'noindex' => ['nullable', 'boolean'],
             'comments_enabled' => ['nullable', 'boolean'],
+            'access_password' => $this->contentType($request) === 'post'
+                ? ['exclude_if:remove_access_password,1', 'nullable', 'string', 'min:8', 'max:255']
+                : ['prohibited'],
+            'remove_access_password' => $this->contentType($request) === 'post'
+                ? ['nullable', 'boolean']
+                : ['prohibited'],
             'lock_version' => [$post ? 'required' : 'nullable', 'integer', 'min:1'],
+        ], [
+            'access_password.min' => '限定公開パスワードは8文字以上で入力してください。',
+            'access_password.max' => '限定公開パスワードは255文字以内で入力してください。',
         ]);
     }
 
@@ -318,6 +330,21 @@ class PostController extends Controller
         }
         if ($data['status'] !== 'scheduled') {
             $data['scheduled_at'] = null;
+        }
+    }
+
+    private function applyAccessPassword(array &$data, bool $updating = false): void
+    {
+        $remove = (bool) ($data['remove_access_password'] ?? false);
+        $password = $data['access_password'] ?? null;
+        unset($data['access_password'], $data['remove_access_password']);
+
+        if ($remove) {
+            $data['access_password'] = null;
+        } elseif (is_string($password) && $password !== '') {
+            $data['access_password'] = Hash::make($password);
+        } elseif (! $updating) {
+            $data['access_password'] = null;
         }
     }
 

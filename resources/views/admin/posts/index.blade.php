@@ -16,7 +16,7 @@
         <div class="bulk-actions-submit"><span data-bulk-selected-count aria-live="polite">0件選択</span><button class="button secondary" type="submit" data-bulk-markdown-submit disabled>{{ $isPage ? '選択ページ' : '選択記事' }}をMD出力</button></div>
     </div>
     <div class="table-wrap"><table><thead><tr><th class="row-selector">選択</th><th>タイトル</th><th>状態</th><th>カテゴリー</th><th>更新日時</th></tr></thead><tbody>
-    @forelse($posts as $post)<tr><td class="row-selector"><input type="checkbox" name="post_ids[]" value="{{ $post->id }}" data-bulk-markdown-item aria-label="{{ $post->title }}を選択"></td><td><a href="{{ route($isPage ? 'admin.pages.edit' : 'admin.posts.edit', $post) }}"><strong>{{ $post->title }}</strong><small>/{{ $post->slug }}</small></a></td><td><span class="status {{ $post->status }}">{{ $post->status }}</span></td><td>{{ $post->category?->name ?? '—' }}</td><td>{{ $post->updated_at->format('Y-m-d H:i') }}</td></tr>
+    @forelse($posts as $post)<tr><td class="row-selector"><input type="checkbox" name="post_ids[]" value="{{ $post->id }}" data-bulk-markdown-item aria-label="{{ $post->title }}を選択"></td><td><a href="{{ route($isPage ? 'admin.pages.edit' : 'admin.posts.edit', $post) }}"><strong>{{ $post->title }}</strong><small>/{{ $post->slug }}</small></a></td><td><span class="status {{ $post->status }}">{{ $post->status }}</span>@if($post->isPasswordProtected()) <span class="access-badge">限定公開</span>@endif</td><td>{{ $post->category?->name ?? '—' }}</td><td>{{ $post->updated_at->format('Y-m-d H:i') }}</td></tr>
     @empty<tr><td colspan="5" class="empty">条件に一致する{{ $isPage ? '固定ページ' : '記事' }}はありません。</td></tr>@endforelse
     </tbody></table></div>
 </form>

@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Post;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class PublicContentApiTest extends TestCase
@@ -29,6 +30,42 @@ class PublicContentApiTest extends TestCase
 
         $response = $this->getJson('/api/v1/posts/cached')->assertOk();
         $response->assertHeader('ETag')->assertHeader('Last-Modified');
+    }
+
+    public function test_password_protected_article_hides_its_body_until_authorized(): void
+    {
+        $author = User::factory()->create();
+        $post = Post::create([
+            'slug' => 'members-only',
+            'title' => 'Members only',
+            'description' => 'Protected article summary',
+            'body_markdown' => 'Secret Markdown body',
+            'status' => 'published',
+            'published_at' => now(),
+            'author_id' => $author->id,
+            'access_password' => Hash::make('reader-pass-2026'),
+        ]);
+
+        $list = $this->getJson('/api/v1/posts')->assertOk()
+            ->assertJsonPath('data.0.passwordProtected', true)
+            ->assertJsonPath('data.0.bodyMarkdown', null);
+        $this->assertStringNotContainsString($post->access_password, $list->getContent());
+        $this->getJson('/api/v1/posts/members-only')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'CONTENT_PASSWORD_REQUIRED');
+        $this->withHeader('X-Content-Password', 'incorrect-password')
+            ->getJson('/api/v1/posts/members-only')
+            ->assertUnauthorized();
+        $this->withHeader('X-Content-Password', 'reader-pass-2026')
+            ->getJson('/api/v1/posts/members-only')
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('data.bodyMarkdown', 'Secret Markdown body')
+            ->assertJsonPath('data.passwordProtected', true)
+            ->assertJsonPath('data.seo.noindex', true);
+        $this->getJson('/api/v1/content-manifest')
+            ->assertOk()
+            ->assertJsonPath('data.0.passwordProtected', true);
     }
 
     public function test_post_cursor_pagination_serializes_without_losing_order_columns(): void

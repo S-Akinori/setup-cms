@@ -17,7 +17,8 @@ const posts = defineCollection({
     slug: z.string(),
     title: z.string(),
     description: z.string().nullable(),
-    bodyMarkdown: z.string(),
+    bodyMarkdown: z.string().nullable(),
+    passwordProtected: z.boolean(),
     publishedAt: z.string(),
     updatedAt: z.string(),
     tags: z.array(z.object({ name: z.string(), slug: z.string() })),
@@ -43,6 +44,29 @@ const pages = defineCollection({
 
 export const collections = { posts, pages };
 ```
+
+## 限定公開記事
+
+一覧APIでは限定公開記事の`passwordProtected`が`true`、`bodyMarkdown`が`null`になります。限定本文を静的HTMLへ含めると保護できないため、対象ページはAstro SSRまたはサーバー側APIルートで動的に取得してください。読者が入力したパスワードをブラウザへ保存せず、CMSへHTTPSで送信します。
+
+```ts
+const response = await fetch(`${import.meta.env.CMS_API_URL}/api/v1/posts/${slug}`, {
+  headers: { 'X-Content-Password': password },
+  cache: 'no-store',
+});
+
+if (response.status === 401) {
+  return { passwordRequired: true };
+}
+if (response.status === 429) {
+  throw new Error('試行回数が多すぎます。時間を置いて再試行してください。');
+}
+if (!response.ok) throw new Error(`CMS API: ${response.status}`);
+
+const { data: post } = await response.json();
+```
+
+コメントの取得・投稿にも同じ`X-Content-Password`ヘッダーが必要です。パスワードはURL、ログ、静的生成物、クライアント用環境変数へ含めないでください。
 
 ## コメントAPI
 

@@ -5,30 +5,43 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Comment;
 use App\Models\Post;
+use App\Services\ContentPasswordGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class CommentController extends Controller
 {
-    public function postIndex(string $slug, Request $request): JsonResponse
+    public function postIndex(string $slug, Request $request, ContentPasswordGuard $passwordGuard): JsonResponse
     {
-        return $this->index($this->content($slug, 'post'), $request);
+        $post = $this->content($slug, 'post');
+        $passwordGuard->ensureAccess($post, $request);
+
+        return $this->index($post, $request);
     }
 
-    public function pageIndex(string $slug, Request $request): JsonResponse
+    public function pageIndex(string $slug, Request $request, ContentPasswordGuard $passwordGuard): JsonResponse
     {
-        return $this->index($this->content($slug, 'page'), $request);
+        $page = $this->content($slug, 'page');
+        $passwordGuard->ensureAccess($page, $request);
+
+        return $this->index($page, $request);
     }
 
-    public function postStore(string $slug, Request $request): JsonResponse
+    public function postStore(string $slug, Request $request, ContentPasswordGuard $passwordGuard): JsonResponse
     {
-        return $this->store($this->content($slug, 'post'), $request);
+        $post = $this->content($slug, 'post');
+        $passwordGuard->ensureAccess($post, $request);
+
+        return $this->store($post, $request);
     }
 
-    public function pageStore(string $slug, Request $request): JsonResponse
+    public function pageStore(string $slug, Request $request, ContentPasswordGuard $passwordGuard): JsonResponse
     {
-        return $this->store($this->content($slug, 'page'), $request);
+        $page = $this->content($slug, 'page');
+        $passwordGuard->ensureAccess($page, $request);
+
+        return $this->store($page, $request);
     }
 
     private function index(Post $post, Request $request): JsonResponse

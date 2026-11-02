@@ -10,10 +10,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['content_type', 'slug', 'title', 'description', 'body_markdown', 'status', 'published_at', 'scheduled_at', 'author_id', 'category_id', 'featured_image_id', 'seo_title', 'seo_description', 'canonical_url', 'noindex', 'comments_enabled', 'lock_version'])]
+#[Fillable(['content_type', 'slug', 'title', 'description', 'body_markdown', 'status', 'published_at', 'scheduled_at', 'author_id', 'category_id', 'featured_image_id', 'seo_title', 'seo_description', 'canonical_url', 'noindex', 'comments_enabled', 'access_password', 'lock_version'])]
 class Post extends Model
 {
     use HasUlids, SoftDeletes;
+
+    protected $hidden = ['access_password'];
 
     protected function casts(): array
     {
@@ -53,6 +55,11 @@ class Post extends Model
     public function comments(): HasMany
     {
         return $this->hasMany(Comment::class);
+    }
+
+    public function isPasswordProtected(): bool
+    {
+        return is_string($this->access_password) && $this->access_password !== '';
     }
 
     public function scopePublished($query)

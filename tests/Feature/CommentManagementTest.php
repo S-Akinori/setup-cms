@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Post;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class CommentManagementTest extends TestCase
@@ -60,6 +61,23 @@ class CommentManagementTest extends TestCase
             'authorEmail' => 'user@example.com',
             'body' => 'コメント',
         ])->assertForbidden();
+    }
+
+    public function test_password_protected_article_comments_require_the_same_password(): void
+    {
+        $post = $this->publishedPost(['access_password' => Hash::make('reader-pass-2026')]);
+        $post->comments()->create([
+            'author_name' => '限定読者',
+            'author_email' => 'reader@example.com',
+            'body' => '限定コメント',
+            'status' => 'approved',
+        ]);
+
+        $this->getJson('/api/v1/posts/'.$post->slug.'/comments')->assertUnauthorized();
+        $this->withHeader('X-Content-Password', 'reader-pass-2026')
+            ->getJson('/api/v1/posts/'.$post->slug.'/comments')
+            ->assertOk()
+            ->assertJsonPath('data.0.body', '限定コメント');
     }
 
     public function test_admin_can_moderate_and_delete_comments(): void

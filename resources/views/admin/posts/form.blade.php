@@ -107,6 +107,18 @@
             <label>スラッグ<input name="slug" value="{{ old('slug', $post->slug ?? '') }}" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" data-slug></label>
             <label>概要<textarea name="description" rows="3" maxlength="500">{{ old('description', $post->description ?? '') }}</textarea></label>
             <label>状態<select name="status">@foreach(['draft'=>'下書き','scheduled'=>'予約公開','published'=>'公開','archived'=>'保管'] as $value=>$label)<option value="{{ $value }}" @selected(old('status', $post->status ?? 'draft')===$value)>{{ $label }}</option>@endforeach</select></label>
+            @unless($isPage)
+                <div class="access-password-field">
+                    <label>限定公開パスワード
+                        <input type="password" name="access_password" minlength="8" maxlength="255" autocomplete="new-password" placeholder="8文字以上">
+                    </label>
+                    <small>{{ $editing && $post->isPasswordProtected() ? '現在はパスワード保護されています。変更する場合だけ新しいパスワードを入力してください。' : '設定すると、正しいパスワードを送信した場合だけ本文を取得できます。' }}</small>
+                    @if($editing && $post->isPasswordProtected())
+                        <input type="hidden" name="remove_access_password" value="0">
+                        <label class="check"><input type="checkbox" name="remove_access_password" value="1" @checked(old('remove_access_password'))>パスワード保護を解除する</label>
+                    @endif
+                </div>
+            @endunless
         </section>
 
         <section class="panel stack">

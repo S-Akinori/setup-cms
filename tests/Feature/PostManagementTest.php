@@ -7,6 +7,7 @@ use App\Models\Media;
 use App\Models\Post;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -82,6 +83,55 @@ class PostManagementTest extends TestCase
         $response->assertRedirect(route('admin.posts.edit', $post));
         $this->assertSame("## Heading\n\n\n\nBody\n\n```html\n<br />\n```", $post->body_markdown);
         $this->assertCount(0, $post->tags);
+    }
+
+    public function test_admin_can_set_preserve_and_remove_an_article_password(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin)->post('/admin/posts', [
+            'title' => '短いパスワード',
+            'slug' => 'short-password',
+            'body_markdown' => '本文',
+            'status' => 'draft',
+            'access_password' => 'short',
+        ])->assertSessionHasErrors('access_password');
+
+        $this->actingAs($admin)->post('/admin/posts', [
+            'title' => '限定記事',
+            'slug' => 'protected-article',
+            'body_markdown' => '限定本文',
+            'status' => 'published',
+            'access_password' => 'reader-pass-2026',
+        ])->assertSessionHasNoErrors();
+
+        $post = Post::where('slug', 'protected-article')->sole();
+        $this->assertNotSame('reader-pass-2026', $post->access_password);
+        $this->assertTrue(Hash::check('reader-pass-2026', $post->access_password));
+        $this->actingAs($admin)->get('/admin/posts/'.$post->id.'/edit')
+            ->assertOk()
+            ->assertSee('現在はパスワード保護されています。')
+            ->assertDontSee($post->access_password);
+
+        $this->actingAs($admin)->put('/admin/posts/'.$post->id, [
+            'title' => $post->title,
+            'slug' => $post->slug,
+            'body_markdown' => $post->body_markdown,
+            'status' => $post->status,
+            'lock_version' => $post->lock_version,
+        ])->assertSessionHasNoErrors();
+        $this->assertTrue(Hash::check('reader-pass-2026', $post->fresh()->access_password));
+
+        $post->refresh();
+        $this->actingAs($admin)->put('/admin/posts/'.$post->id, [
+            'title' => $post->title,
+            'slug' => $post->slug,
+            'body_markdown' => $post->body_markdown,
+            'status' => $post->status,
+            'remove_access_password' => '1',
+            'lock_version' => $post->lock_version,
+        ])->assertSessionHasNoErrors();
+        $this->assertNull($post->fresh()->access_password);
     }
 
     public function test_stale_edit_is_rejected(): void
