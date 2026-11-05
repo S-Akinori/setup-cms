@@ -7,6 +7,13 @@ return [
         'token' => env('FRONTEND_BUILD_WEBHOOK_TOKEN'),
     ],
 
+    'github_deploy' => [
+        'token' => env('GITHUB_DEPLOY_TOKEN'),
+        'owner' => env('GITHUB_DEPLOY_OWNER'),
+        'repository' => env('GITHUB_DEPLOY_REPOSITORY'),
+        'event_type' => env('GITHUB_DEPLOY_EVENT_TYPE', 'cms-published'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

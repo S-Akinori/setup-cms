@@ -8,6 +8,7 @@ import { latex } from '@milkdown/crepe/feature/latex';
 import { linkTooltip } from '@milkdown/crepe/feature/link-tooltip';
 import { listItem } from '@milkdown/crepe/feature/list-item';
 import { placeholder } from '@milkdown/crepe/feature/placeholder';
+import { table } from '@milkdown/crepe/feature/table';
 import { toolbar } from '@milkdown/crepe/feature/toolbar';
 import { commandsCtx } from '@milkdown/kit/core';
 import { callCommand, insert, replaceAll } from '@milkdown/kit/utils';
@@ -48,12 +49,25 @@ const contentCommandButtons = document.querySelectorAll('[data-content-command]'
 const standaloneUrlPattern = /^https?:\/\/[^\s<>]+$/i;
 const contentTemplates = {
     button: '[ボタンの文字](https://example.com "cms-button:primary")',
-    box: '> **ポイント**\n>\n> ここに内容を入力してください。',
+    box: '> **補足**\n>\n> ここに補足内容を入力してください。',
+    noteInfo: '> **補足**\n>\n> ここに補足内容を入力してください。',
+    noteWarn: '> **注意**\n>\n> ここに注意事項を入力してください。',
+    noteAlert: '> **警告**\n>\n> ここに重要な警告を入力してください。',
+    codeBlock: '```text:filename.txt\nコードを入力してください。\n```',
+    mathBlock: '$$\n\\sum_{k=1}^{n} k\n$$',
+    mermaid: '```mermaid\nflowchart TD\n    A[開始] --> B[終了]\n```',
+    footnote: '本文に脚注を付けます[^1]\n\n[^1]: 脚注の内容を入力してください。',
 };
 const contentCommandIcons = {
     button: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M8 12h8"></path><path d="m14 10 2 2-2 2"></path></svg>',
     box: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M7 9h10"></path><path d="M7 13h7"></path></svg>',
     gallery: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9" r="1.5"></circle><path d="m5.5 17 4-4 3 3 2.5-2.5 3.5 3.5"></path></svg>',
+    info: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg>',
+    warn: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.8 19h18.4z"></path><path d="M12 9v4"></path><path d="M12 16h.01"></path></svg>',
+    code: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4 4 4 4"></path><path d="m16 8 4 4-4 4"></path><path d="m14 5-4 14"></path></svg>',
+    math: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 5H9l5 7-5 7h9"></path></svg>',
+    diagram: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="5" rx="1"></rect><rect x="15" y="16" width="6" height="5" rx="1"></rect><path d="M9 5.5h3a5 5 0 0 1 5 5V16"></path></svg>',
+    footnote: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h10"></path><path d="M10 5v14"></path><path d="M15 14h4l-4 5h4"></path></svg>',
 };
 
 const addContentSlashCommands = (builder) => {
@@ -82,6 +96,48 @@ const addContentSlashCommands = (builder) => {
                 ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
                 window.requestAnimationFrame(() => imageCommand?.click());
             },
+        });
+
+    const insertQiitaTemplate = (ctx, template) => {
+        ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+        insert(template)(ctx);
+    };
+    const qiita = builder.addGroup('qiita-markdown', 'Qiita Markdown');
+    qiita
+        .addItem('qiita-note-info', {
+            label: 'Note（補足）',
+            icon: contentCommandIcons.info,
+            onRun: (ctx) => insertQiitaTemplate(ctx, contentTemplates.noteInfo),
+        })
+        .addItem('qiita-note-warn', {
+            label: 'Note（注意）',
+            icon: contentCommandIcons.warn,
+            onRun: (ctx) => insertQiitaTemplate(ctx, contentTemplates.noteWarn),
+        })
+        .addItem('qiita-note-alert', {
+            label: 'Note（警告）',
+            icon: contentCommandIcons.warn,
+            onRun: (ctx) => insertQiitaTemplate(ctx, contentTemplates.noteAlert),
+        })
+        .addItem('qiita-code-block', {
+            label: 'コード＋ファイル名',
+            icon: contentCommandIcons.code,
+            onRun: (ctx) => insertQiitaTemplate(ctx, contentTemplates.codeBlock),
+        })
+        .addItem('qiita-math-block', {
+            label: '数式ブロック',
+            icon: contentCommandIcons.math,
+            onRun: (ctx) => insertQiitaTemplate(ctx, contentTemplates.mathBlock),
+        })
+        .addItem('qiita-mermaid', {
+            label: 'Mermaid',
+            icon: contentCommandIcons.diagram,
+            onRun: (ctx) => insertQiitaTemplate(ctx, contentTemplates.mermaid),
+        })
+        .addItem('qiita-footnote', {
+            label: '脚注',
+            icon: contentCommandIcons.footnote,
+            onRun: (ctx) => insertQiitaTemplate(ctx, contentTemplates.footnote),
         });
 };
 
@@ -121,6 +177,66 @@ const normalizeMarkdown = (markdown) => {
 
         return line;
     }).join('\n');
+};
+
+const qiitaNoteLabels = {
+    info: '補足',
+    warn: '注意',
+    alert: '警告',
+};
+
+const toEditorMarkdown = (markdown) => {
+    const lines = normalizeMarkdown(markdown).split('\n');
+    const converted = [];
+
+    for (let index = 0; index < lines.length; index += 1) {
+        const opening = lines[index].match(/^:::note(?:\s+(info|warn|alert))?\s*$/);
+        if (!opening) {
+            converted.push(lines[index]);
+            continue;
+        }
+
+        const closing = lines.indexOf(':::', index + 1);
+        if (closing === -1) {
+            converted.push(lines[index]);
+            continue;
+        }
+
+        const type = opening[1] ?? 'info';
+        converted.push(`> **${qiitaNoteLabels[type]}**`, '>');
+        lines.slice(index + 1, closing).forEach((line) => converted.push(line ? `> ${line}` : '>'));
+        index = closing;
+    }
+
+    return converted.join('\n');
+};
+
+const toStorageMarkdown = (markdown) => {
+    const lines = normalizeMarkdown(markdown).split('\n');
+    const labelTypes = Object.fromEntries(Object.entries(qiitaNoteLabels).map(([type, label]) => [label, type]));
+    const converted = [];
+
+    for (let index = 0; index < lines.length; index += 1) {
+        const title = lines[index].match(/^>\s*\*\*(補足|注意|警告)\*\*\s*$/);
+        if (!title) {
+            converted.push(lines[index]);
+            continue;
+        }
+
+        const body = [];
+        let cursor = index + 1;
+        while (cursor < lines.length && /^>/.test(lines[cursor])) {
+            body.push(lines[cursor].replace(/^> ?/, ''));
+            cursor += 1;
+        }
+        while (body[0] === '') body.shift();
+        while (body.at(-1) === '') body.pop();
+
+        converted.push(`:::note ${labelTypes[title[1]]}`, ...body, ':::');
+        index = cursor - 1;
+    }
+
+    return converted.join('\n');
 };
 
 const markdownFileName = (title) => {
@@ -244,8 +360,8 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         }
     };
 
-    const initialMarkdown = normalizeMarkdown(markdownField.value);
-    markdownField.value = initialMarkdown;
+    const initialMarkdown = toEditorMarkdown(markdownField.value);
+    markdownField.value = toStorageMarkdown(initialMarkdown);
     const crepe = new CrepeBuilder({
         root: editorRoot,
         defaultValue: initialMarkdown,
@@ -274,11 +390,12 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
             mode: 'block',
         })
         .addFeature(codeMirror)
+        .addFeature(table)
         .addFeature(latex);
 
     crepe.on((listener) => {
         listener.markdownUpdated((ctx, markdown) => {
-            markdownField.value = normalizeMarkdown(markdown);
+            markdownField.value = toStorageMarkdown(markdown);
         });
     });
 
@@ -320,7 +437,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
                         throw new Error('Markdownファイルは1MB以下にしてください。');
                     }
 
-                    const currentMarkdown = normalizeMarkdown(crepe.getMarkdown()).trim();
+                    const currentMarkdown = toStorageMarkdown(crepe.getMarkdown()).trim();
                     const shouldReplace = !currentMarkdown || window.confirm(
                         '現在の本文を「' + file.name + '」の内容で置き換えます。よろしいですか？',
                     );
@@ -338,9 +455,9 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
                         throw new Error('空のMarkdownファイルは読み込めません。');
                     }
 
-                    const normalizedMarkdown = normalizeMarkdown(fileMarkdown);
-                    crepe.editor.action(replaceAll(normalizedMarkdown));
-                    markdownField.value = normalizedMarkdown;
+                    const editorMarkdown = toEditorMarkdown(fileMarkdown);
+                    crepe.editor.action(replaceAll(editorMarkdown));
+                    markdownField.value = toStorageMarkdown(editorMarkdown);
                     markdownField.dispatchEvent(new Event('input', { bubbles: true }));
                     proseMirror?.focus();
                     setStatus('「' + file.name + '」を本文へ読み込みました。', 'success');
@@ -353,7 +470,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         }
 
         markdownExport?.addEventListener('click', () => {
-            const markdown = normalizeMarkdown(crepe.getMarkdown()).trim();
+            const markdown = toStorageMarkdown(crepe.getMarkdown()).trim();
             if (!markdown) {
                 setStatus('出力する本文がありません。', 'error');
                 proseMirror?.focus();
@@ -392,7 +509,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
                 alt: media.alt || '',
                 title: '',
             }));
-            markdownField.value = normalizeMarkdown(crepe.getMarkdown());
+            markdownField.value = toStorageMarkdown(crepe.getMarkdown());
             proseMirror?.focus();
             setStatus('画像を本文へ挿入しました。', 'success');
         };
@@ -401,7 +518,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
             button.addEventListener('mousedown', (event) => event.preventDefault());
             button.addEventListener('click', () => {
                 commands[button.dataset.markdownCommand]?.();
-                markdownField.value = normalizeMarkdown(crepe.getMarkdown());
+                markdownField.value = toStorageMarkdown(crepe.getMarkdown());
             });
         });
 
@@ -412,7 +529,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
                 if (!template) return;
 
                 crepe.editor.action(insert(template));
-                markdownField.value = normalizeMarkdown(crepe.getMarkdown());
+                markdownField.value = toStorageMarkdown(crepe.getMarkdown());
                 proseMirror?.focus();
             });
         });
@@ -563,7 +680,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
 
         const editorForm = markdownField.closest('form');
         editorForm?.addEventListener('submit', (event) => {
-            markdownField.value = normalizeMarkdown(crepe.getMarkdown()).trim();
+            markdownField.value = toStorageMarkdown(crepe.getMarkdown()).trim();
             if (!markdownField.value) {
                 event.preventDefault();
                 setStatus('本文を入力してください。', 'error');

@@ -135,6 +135,7 @@ class ContentController extends Controller
         return [
             'id' => $post->id, 'slug' => $post->slug, 'title' => $post->title,
             'type' => $post->content_type,
+            'markdownFlavor' => 'qiita',
             'passwordProtected' => $passwordProtected,
             'commentsEnabled' => $post->comments_enabled,
             'description' => $post->description,

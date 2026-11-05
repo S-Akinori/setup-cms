@@ -67,6 +67,49 @@ class PostManagementTest extends TestCase
         ])->assertSessionHasNoErrors();
     }
 
+    public function test_qiita_markdown_notation_is_preserved(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $markdown = <<<'MARKDOWN'
+:::note warn
+注意事項です。
+:::
+
+- [x] 完了
+- [ ] 未完了
+
+| 項目 | 値 |
+| --- | --- |
+| 速度 | 10 m/s |
+
+```php:Example.php
+echo 'Qiita';
+```
+
+$$
+E = mc^2
+$$
+
+```mermaid
+graph TD
+  A --> B
+```
+
+脚注です[^1]。
+
+[^1]: 脚注の内容
+MARKDOWN;
+
+        $this->actingAs($admin)->post('/admin/posts', [
+            'title' => 'Qiita Markdown',
+            'slug' => 'qiita-markdown',
+            'body_markdown' => $markdown,
+            'status' => 'draft',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame($markdown, Post::where('slug', 'qiita-markdown')->sole()->body_markdown);
+    }
+
     public function test_editor_empty_line_placeholders_are_normalized_before_validation(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);

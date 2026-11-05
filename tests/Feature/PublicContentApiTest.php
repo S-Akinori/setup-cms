@@ -19,7 +19,7 @@ class PublicContentApiTest extends TestCase
         Post::create(['slug' => 'visible', 'title' => 'Visible', 'body_markdown' => '# Hello $x$', 'status' => 'published', 'published_at' => now(), 'author_id' => $author->id]);
         Post::create(['slug' => 'draft', 'title' => 'Draft', 'body_markdown' => 'Secret', 'status' => 'draft', 'author_id' => $author->id]);
 
-        $this->getJson('/api/v1/posts')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.slug', 'visible')->assertJsonPath('data.0.bodyMarkdown', '# Hello $x$');
+        $this->getJson('/api/v1/posts')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.slug', 'visible')->assertJsonPath('data.0.bodyMarkdown', '# Hello $x$')->assertJsonPath('data.0.markdownFlavor', 'qiita');
         $this->getJson('/api/v1/posts/draft')->assertNotFound();
     }
 

@@ -63,6 +63,8 @@ class AdminAccessTest extends TestCase
             ->assertSee('data-markdown-command="ol"', false)
             ->assertSee('data-content-command="button"', false)
             ->assertSee('data-content-command="box"', false)
+            ->assertSee('Qiita Markdown本文')
+            ->assertSee('Qiita Noteを挿入')
             ->assertSee('data-image-command', false)
             ->assertSee('画像ギャラリーから選択・アップロード')
             ->assertSee('data-markdown-file-trigger', false)

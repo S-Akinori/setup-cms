@@ -12,10 +12,10 @@
         <div class="markdown-workspace">
             <div class="editor-heading">
                 <div>
-                    <strong>Markdown本文</strong>
-                    <span>Markdownを入力すると、その場で表示が切り替わります</span>
+                    <strong>Qiita Markdown本文</strong>
+                    <span>GFMとQiita Note記法を入力できます</span>
                 </div>
-                <span class="latex-hint">LaTeX: $...$ / $$...$$</span>
+                <span class="latex-hint">数式: $...$ / $$...$$</span>
             </div>
 
             <div class="markdown-toolbar" role="toolbar" aria-label="Markdownコマンド">
@@ -25,7 +25,7 @@
                 <button type="button" class="toolbar-button" data-markdown-command="ol" title="番号付きリストを挿入" disabled>ol</button>
                 <span class="toolbar-divider" aria-hidden="true"></span>
                 <button type="button" class="toolbar-button" data-content-command="button" title="リンクボタンを挿入" disabled>ボタン</button>
-                <button type="button" class="toolbar-button" data-content-command="box" title="囲いボックスを挿入" disabled>囲い</button>
+                <button type="button" class="toolbar-button" data-content-command="box" title="Qiita Noteを挿入" disabled>Note</button>
                 <span class="toolbar-divider" aria-hidden="true"></span>
                 <button type="button" class="toolbar-button image-command" data-image-command title="画像ギャラリーから選択・アップロード" disabled>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4zM7 15l3.2-3.2 2.5 2.5 1.8-1.8L18 16M8.5 9a1.25 1.25 0 1 0 0 .01"/></svg>
@@ -51,7 +51,7 @@
             </div>
 
             <div class="editor-foot">
-                <p class="editor-help">Markdownファイルの読み込み・出力、画像ギャラリー・ボタン・囲いの挿入に対応しています。</p>
+                <p class="editor-help">Qiita互換のGFM、Note、表、タスクリスト、脚注、数式、Mermaidに対応しています。行頭の「/」から挿入できます。</p>
                 <p class="upload-status" data-upload-status role="status" aria-live="polite"></p>
             </div>
         </div>

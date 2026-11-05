@@ -348,6 +348,11 @@ FILESYSTEM_DISK=local
 
 FRONTEND_BUILD_WEBHOOK_URL=
 FRONTEND_BUILD_WEBHOOK_TOKEN=
+
+GITHUB_DEPLOY_TOKEN=
+GITHUB_DEPLOY_OWNER=
+GITHUB_DEPLOY_REPOSITORY=
+GITHUB_DEPLOY_EVENT_TYPE=cms-published
 ```
 
 `.env`は`public_html`へ置かず、権限を制限します。
@@ -546,18 +551,19 @@ GET https://cms.example.com/api/v1/pages/about
 LaTeX記法を表示する場合：
 
 ```bash
-npm install remark-math rehype-katex katex
+npm install remark-gfm remark-math rehype-katex katex
 ```
 
 ```js
 // astro.config.mjs
 import { defineConfig } from 'astro/config';
+import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
 export default defineConfig({
   markdown: {
-    remarkPlugins: [remarkMath],
+    remarkPlugins: [remarkGfm, remarkMath],
     rehypePlugins: [rehypeKatex],
   },
 });
@@ -565,7 +571,40 @@ export default defineConfig({
 
 詳しい取得例は[docs/astro-integration.md](docs/astro-integration.md)を参照してください。100件を超える場合はAPIのページネーションカーソルをたどります。
 
-ビルドWebhookを使う場合は、CMSの`.env`へリポジトリ専用の最小権限トークンを設定します。トークンをクライアントコードや公開リポジトリへ含めません。
+### 記事更新時にGitHub Actionsで自動デプロイする
+
+Astroリポジトリのデプロイワークフローへ、外部イベントの受信設定を追加します。
+
+```yaml
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [cms-published]
+```
+
+GitHubでFine-grained personal access tokenを作成し、対象をAstroリポジトリだけに限定して、Repository permissionsの`Contents: Read and write`を付与します。CMSの本番`.env`へ次を設定します。
+
+```dotenv
+GITHUB_DEPLOY_TOKEN=github_pat_xxxxxxxxx
+GITHUB_DEPLOY_OWNER=S-Akinori
+GITHUB_DEPLOY_REPOSITORY=physics-setup-blog
+GITHUB_DEPLOY_EVENT_TYPE=cms-published
+```
+
+設定後にLaravelの設定キャッシュを更新します。
+
+```bash
+php artisan config:clear
+php artisan config:cache
+```
+
+公開記事・固定ページの作成、更新、非公開化、削除、復元、カテゴリー変更、予約公開、WordPressインポートが行われると、CMSがGitHubのRepository Dispatch APIを呼び出します。GitHub ActionsはCMS APIから最新データを取得してAstroをビルドし、既存のXServerデプロイ処理を実行します。下書きだけの新規保存ではデプロイしません。
+
+GitHubがイベントを受理すると`build_jobs.status`は`running`になります。トークン・リポジトリ名の誤りやAPIエラーは`failed`として記録され、Laravelログにも出力されます。トークンをクライアントコード、Astroの公開環境変数、Gitリポジトリへ含めないでください。
+
+従来の任意Webhookを使用する場合は、`GITHUB_DEPLOY_*`をすべて空にしたうえで`FRONTEND_BUILD_WEBHOOK_URL`と`FRONTEND_BUILD_WEBHOOK_TOKEN`を使用できます。
 
 ## 日常運用
 
@@ -577,7 +616,7 @@ export default defineConfig({
 4. 画像をドラッグ＆ドロップするか、アップロード済み画像を選択
 5. 保存
 
-本文はエディタ内でMarkdown表示とプレビューが切り替わります。H2、H3、箇条書き、番号付きリスト、画像、ボタン、囲いボックスはツールバーから挿入できます。
+本文はエディタ内でMarkdown表示とプレビューが切り替わります。Qiita互換のGFMを基本とし、見出し、リスト、タスクリスト、表、画像、コード、脚注、数式、Mermaid、Qiita Noteを利用できます。行頭で`/`を入力すると、ボタン、画像ギャラリー、Noteなどを挿入できます。
 
 ### 限定公開記事
 
@@ -592,7 +631,29 @@ X-Content-Password: reader-password
 
 限定公開記事の成功レスポンスは`Cache-Control: private, no-store`です。Astroの静的ビルドへ限定本文を埋め込むとパスワードなしで閲覧できてしまうため、限定公開ページはSSRまたはサーバー側APIルートで取得してください。通信には必ずHTTPSを使用します。実装例は[docs/astro-integration.md](docs/astro-integration.md)を参照してください。
 
-### ボタンと囲いボックス
+### Qiita Markdown互換記法
+
+囲いはQiita Note記法を使用します。種類は`info`、`warn`、`alert`です。
+
+```markdown
+:::note warn
+ここに注意事項を書きます。
+:::
+```
+
+コードブロックでは、言語名の後ろにファイル名を指定できます。
+
+````markdown
+```php:Example.php
+echo 'Hello';
+```
+````
+
+数式は`$...$`または`$$...$$`、図は`mermaid`コードブロック、脚注は`[^1]`記法を使用します。APIは記法を変換せず`bodyMarkdown`へ返し、`markdownFlavor`は`qiita`です。公開サイト側で対応するMarkdownプラグインとスタイルを適用してください。
+
+安全性を保つため、Qiitaで利用可能な任意の生HTML、`details`、埋め込みタグはこのCMSでは保存できません。本文にはMarkdown記法を使用してください。
+
+### CMSボタン
 
 ボタンは、リンクのtitleへ`cms-button:primary`または`cms-button:secondary`を指定します。
 
@@ -600,15 +661,7 @@ X-Content-Password: reader-password
 [詳しく見る](https://example.com/guide "cms-button:primary")
 ```
 
-囲いボックスはMarkdownの引用とリンクtitleを使います。種類は`info`、`warning`、`success`、`danger`です。
-
-```markdown
-> [ポイント](# "cms-box:info")
->
-> ここに通常のMarkdownを書けます。
-```
-
-APIでは上記のMarkdown記法をそのまま`bodyMarkdown`へ返します。公開サイトではAstro側のMarkdown処理でボタンと囲いボックスへ変換し、サイト固有のスタイルを適用してください。任意の生HTMLは保存できません。
+公開サイトではAstro側のMarkdown処理でボタンへ変換し、サイト固有のスタイルを適用してください。
 
 | 状態 | 動作 |
 | --- | --- |

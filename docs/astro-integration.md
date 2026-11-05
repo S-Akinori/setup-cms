@@ -1,6 +1,6 @@
 # Astro連携
 
-CMSは変換前のMarkdownを返します。Astro側で `remark-math` と `rehype-katex` を使ってHTMLと数式を生成してください。
+CMSはQiita互換の変換前Markdownを返します。Astro側で `remark-gfm`、`remark-math`、`rehype-katex` などを使ってHTMLと数式を生成してください。
 
 ```ts
 // src/content.config.ts
@@ -18,6 +18,7 @@ const posts = defineCollection({
     title: z.string(),
     description: z.string().nullable(),
     bodyMarkdown: z.string().nullable(),
+    markdownFlavor: z.literal('qiita'),
     passwordProtected: z.boolean(),
     publishedAt: z.string(),
     updatedAt: z.string(),
@@ -37,6 +38,7 @@ const pages = defineCollection({
     title: z.string(),
     description: z.string().nullable(),
     bodyMarkdown: z.string(),
+    markdownFlavor: z.literal('qiita'),
     publishedAt: z.string(),
     updatedAt: z.string(),
   }),
@@ -98,14 +100,42 @@ await fetch(`${import.meta.env.CMS_API_URL}/api/v1/posts/${slug}/comments`, {
 
 `astro.config.mjs` のMarkdown設定例：
 
+```bash
+npm install remark-gfm remark-math rehype-katex katex
+```
+
 ```js
 import { defineConfig } from 'astro/config';
+import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
 export default defineConfig({
-  markdown: { remarkPlugins: [remarkMath], rehypePlugins: [rehypeKatex] },
+  markdown: { remarkPlugins: [remarkGfm, remarkMath], rehypePlugins: [rehypeKatex] },
 });
 ```
 
-公開Webhookにはリポジトリ専用の最小権限トークンを使い、ブラウザへ露出させないでください。
+Qiita Note（`:::note`）、Mermaid、脚注、CMSボタンは、公開サイト側でも対応するremarkプラグインまたは独自変換を追加してください。安全性を保つため、CMSが禁止している生HTMLを有効化する`rehype-raw`は使用しないでください。
+
+## GitHub Actionsによる自動更新
+
+Astroのデプロイワークフローで、CMSから送られるイベントを受信します。
+
+```yaml
+on:
+  repository_dispatch:
+    types: [cms-published]
+```
+
+CMSの本番`.env`へ、対象リポジトリだけに限定したFine-grained personal access tokenを設定します。
+
+```dotenv
+GITHUB_DEPLOY_TOKEN=github_pat_xxxxxxxxx
+GITHUB_DEPLOY_OWNER=S-Akinori
+GITHUB_DEPLOY_REPOSITORY=physics-setup-blog
+GITHUB_DEPLOY_EVENT_TYPE=cms-published
+```
+
+公開コンテンツやカテゴリーが変更されると、CMSは`POST /repos/{owner}/{repository}/dispatches`を呼び出します。既存のGitHub ActionsがAstroを再ビルドしてXServerへ配置するため、記事更新後の手動ビルドは不要です。
+
+トークンには対象リポジトリの`Contents: Read and write`だけを付与し、ブラウザ、Astroの公開環境変数、Git管理ファイルへ露出させないでください。`repository_dispatch`を受信するワークフローは、リポジトリのデフォルトブランチに存在する必要があります。
