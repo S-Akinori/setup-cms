@@ -197,6 +197,22 @@
             <label class="check"><input type="checkbox" name="noindex" value="1" @checked(old('noindex', $post->noindex ?? false))>検索結果に表示しない</label>
         </section>
 
-        <button class="button primary sticky-save" type="submit">{{ $editing ? '変更を保存' : ($isPage ? '固定ページを作成' : '記事を作成') }}</button>
+        <div class="editor-actions">
+            @if($editing)
+                @if($previewUrlConfigured)
+                    <a class="button secondary preview-button" href="{{ route('admin.preview', $post) }}" target="_blank" rel="noopener noreferrer">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                        プレビュー
+                    </a>
+                @else
+                    <a class="button secondary preview-button" href="{{ route('admin.settings.edit') }}">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                        プレビューURLを設定
+                    </a>
+                @endif
+            @endif
+            <button class="button primary sticky-save" type="submit">{{ $editing ? '変更を保存' : ($isPage ? '固定ページを作成' : '記事を作成') }}</button>
+            <small>保存後、ヘッダーの「ブログを更新」を押すと公開サイトへ反映されます。</small>
+        </div>
     </aside>
 </div>

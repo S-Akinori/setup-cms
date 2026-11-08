@@ -22,6 +22,15 @@ import {
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
 
+const buildForm = document.querySelector('[data-build-form]');
+const buildButton = document.querySelector('[data-build-button]');
+buildForm?.addEventListener('submit', () => {
+    if (!buildButton) return;
+    buildButton.disabled = true;
+    const label = buildButton.querySelector('span');
+    if (label) label.textContent = '更新を開始中';
+});
+
 const markdownField = document.querySelector('[data-markdown]');
 const editorRoot = document.querySelector('[data-rich-markdown-editor]');
 const editorShell = document.querySelector('.markdown-editor-shell');

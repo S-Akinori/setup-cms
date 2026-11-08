@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\Admin\BuildController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\CommentController;
 use App\Http\Controllers\Admin\MediaController;
 use App\Http\Controllers\Admin\PostController;
+use App\Http\Controllers\Admin\PreviewController;
+use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\WordPressImportController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +22,10 @@ Route::middleware('auth')->group(function () {
 
 Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
     Route::get('/', fn () => redirect()->route('admin.posts.index'))->name('dashboard');
+    Route::post('/build', BuildController::class)->middleware('throttle:3,1')->name('build');
+    Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
+    Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::get('/content/{post}/preview', PreviewController::class)->name('preview');
     Route::post('/posts/export-markdown', [PostController::class, 'exportMarkdown'])->name('posts.export-markdown');
     Route::resource('posts', PostController::class)->except('show');
     Route::post('/posts/{post}/revisions/{revision}/restore', [PostController::class, 'restoreRevision'])->name('posts.revisions.restore');

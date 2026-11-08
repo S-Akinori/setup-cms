@@ -8,6 +8,7 @@ use App\Models\Post;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -18,6 +19,12 @@ class PostManagementTest extends TestCase
     public function test_admin_can_create_markdown_post_with_taxonomies(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
+        config()->set('services.github_deploy', [
+            'token' => null,
+            'owner' => null,
+            'repository' => null,
+            'event_type' => 'cms-published',
+        ]);
         $category = Category::create(['name' => '技術', 'slug' => 'technology']);
         $featuredImage = Media::create([
             'disk' => 'public', 'path' => '2026/10/featured.jpg', 'original_name' => 'featured.jpg',
@@ -38,7 +45,7 @@ class PostManagementTest extends TestCase
         $this->assertSame($featuredImage->id, $post->featured_image_id);
         $this->assertSame('post', $post->content_type);
         $this->assertDatabaseHas('post_revisions', ['post_id' => $post->id, 'version' => 1]);
-        $this->assertDatabaseHas('build_jobs', ['reason' => 'post.published', 'status' => 'pending']);
+        $this->assertDatabaseMissing('build_jobs', ['reason' => 'post.published']);
     }
 
     public function test_raw_html_is_rejected_but_html_in_code_block_is_allowed(): void
@@ -65,6 +72,42 @@ class PostManagementTest extends TestCase
             'body_markdown' => "[詳しく見る](https://example.com/guide \"cms-button:primary\")\n\n> [ポイント](# \"cms-box:info\")\n>\n> 囲いボックスの本文です。",
             'status' => 'draft',
         ])->assertSessionHasNoErrors();
+    }
+
+    public function test_updating_a_published_article_waits_for_the_header_build_button(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $post = Post::create([
+            'title' => '公開記事',
+            'slug' => 'published-article',
+            'body_markdown' => '更新前',
+            'status' => 'published',
+            'published_at' => now(),
+            'author_id' => $admin->id,
+        ]);
+        config()->set('services.github_deploy', [
+            'token' => 'github-token',
+            'owner' => 'S-Akinori',
+            'repository' => 'physics-setup-blog',
+            'event_type' => 'cms-published',
+        ]);
+        Http::fake(['api.github.com/*' => Http::response(status: 204)]);
+
+        $this->actingAs($admin)->get("/admin/posts/{$post->id}/edit")
+            ->assertOk()
+            ->assertSee('変更を保存')
+            ->assertSee('ヘッダーの「ブログを更新」を押すと公開サイトへ反映されます。');
+
+        $this->actingAs($admin)->put("/admin/posts/{$post->id}", [
+            'title' => $post->title,
+            'slug' => $post->slug,
+            'body_markdown' => '更新後',
+            'status' => 'published',
+            'lock_version' => $post->fresh()->lock_version,
+        ])->assertSessionHas('success', '記事を更新しました。ヘッダーの「ブログを更新」で公開サイトへ反映できます。');
+
+        $this->assertDatabaseMissing('build_jobs', ['reason' => 'post.updated']);
+        Http::assertNothingSent();
     }
 
     public function test_qiita_markdown_notation_is_preserved(): void

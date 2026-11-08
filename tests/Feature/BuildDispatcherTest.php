@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use App\Services\BuildDispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -57,5 +58,33 @@ class BuildDispatcherTest extends TestCase
         $this->assertNotNull($job->fresh()->finished_at);
         $this->assertStringContainsString('環境変数が不足', $job->fresh()->error);
         Http::assertNothingSent();
+    }
+
+    public function test_header_build_button_dispatches_the_blog_update(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        config()->set('services.github_deploy', [
+            'token' => 'github-token',
+            'owner' => 'S-Akinori',
+            'repository' => 'physics-setup-blog',
+            'event_type' => 'cms-published',
+        ]);
+        Http::fake(['api.github.com/*' => Http::response(status: 204)]);
+
+        $this->actingAs($admin)->get('/admin/posts')
+            ->assertOk()
+            ->assertSee('data-build-form', false)
+            ->assertSee('ブログを更新');
+
+        $this->actingAs($admin)->post(route('admin.build'))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'ブログの更新を開始しました。GitHub Actionsでビルド状況を確認できます。');
+
+        $this->assertDatabaseHas('build_jobs', [
+            'reason' => 'manual.publish',
+            'status' => 'running',
+        ]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'build.requested']);
+        Http::assertSentCount(1);
     }
 }

@@ -7,10 +7,10 @@ use App\Models\Category;
 use App\Models\Media;
 use App\Models\Post;
 use App\Models\PostRevision;
+use App\Models\Setting;
 use App\Models\Tag;
 use App\Rules\NoRawHtml;
 use App\Services\Audit;
-use App\Services\BuildDispatcher;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -145,12 +145,8 @@ class PostController extends Controller
             return $post;
         });
 
-        if ($post->status === 'published') {
-            app(BuildDispatcher::class)->dispatch($contentType.'.published', ['post_id' => $post->id]);
-        }
-
         return redirect()->route($this->routeName($contentType, 'edit'), $post)
-            ->with('success', ($contentType === 'page' ? '固定ページ' : '記事').'を保存しました。');
+            ->with('success', ($contentType === 'page' ? '固定ページ' : '記事').'を保存しました。ヘッダーの「ブログを更新」で公開サイトへ反映できます。');
     }
 
     public function edit(Request $request, Post $post): View
@@ -168,7 +164,6 @@ class PostController extends Controller
         $this->ensureContentType($post, $contentType);
         $data = $this->validated($request, $post);
         $expectedVersion = (int) $data['lock_version'];
-        $wasPublished = $post->status === 'published';
         $this->applyAccessPassword($data, true);
 
         DB::transaction(function () use ($request, $post, $data, $expectedVersion, $contentType) {
@@ -189,26 +184,18 @@ class PostController extends Controller
             Audit::record($request, $contentType.'.updated', $post, ['status' => $post->status]);
         });
 
-        if ($post->status === 'published' || $wasPublished) {
-            app(BuildDispatcher::class)->dispatch($contentType.'.updated', ['post_id' => $post->id]);
-        }
-
-        return back()->with('success', ($contentType === 'page' ? '固定ページ' : '記事').'を更新しました。');
+        return back()->with('success', ($contentType === 'page' ? '固定ページ' : '記事').'を更新しました。ヘッダーの「ブログを更新」で公開サイトへ反映できます。');
     }
 
     public function destroy(Request $request, Post $post): RedirectResponse
     {
         $contentType = $this->contentType($request);
         $this->ensureContentType($post, $contentType);
-        $wasPublished = $post->status === 'published';
         $post->delete();
         Audit::record($request, $contentType.'.deleted', $post);
-        if ($wasPublished) {
-            app(BuildDispatcher::class)->dispatch($contentType.'.deleted', ['post_id' => $post->id]);
-        }
 
         return redirect()->route($this->routeName($contentType, 'index'))
-            ->with('success', ($contentType === 'page' ? '固定ページ' : '記事').'をゴミ箱へ移動しました。');
+            ->with('success', ($contentType === 'page' ? '固定ページ' : '記事').'をゴミ箱へ移動しました。ヘッダーの「ブログを更新」で公開サイトへ反映できます。');
     }
 
     public function restoreRevision(Request $request, Post $post, PostRevision $revision): RedirectResponse
@@ -225,11 +212,8 @@ class PostController extends Controller
             $post->tags()->sync($snapshot['tag_ids'] ?? []);
             Audit::record($request, $post->content_type.'.revision_restored', $post, ['version' => $revision->version]);
         });
-        if ($post->status === 'published') {
-            app(BuildDispatcher::class)->dispatch($contentType.'.restored', ['post_id' => $post->id]);
-        }
 
-        return back()->with('success', '過去の版を復元しました。');
+        return back()->with('success', '過去の版を復元しました。ヘッダーの「ブログを更新」で公開サイトへ反映できます。');
     }
 
     private function validated(Request $request, ?Post $post = null): array
@@ -307,6 +291,7 @@ class PostController extends Controller
             'contentType' => $contentType,
             'categories' => Category::orderBy('name')->get(),
             'mediaItems' => Media::latest()->limit(100)->get(),
+            'previewUrlConfigured' => Setting::valueOf('preview_url') !== null,
         ];
     }
 

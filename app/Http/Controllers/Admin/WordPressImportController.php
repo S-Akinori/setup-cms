@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\Audit;
-use App\Services\BuildDispatcher;
 use App\Services\WordPress\WordPressImporter;
 use App\Services\WordPress\WordPressUploadsArchive;
 use App\Services\WordPress\WxrReader;
@@ -102,13 +101,6 @@ class WordPressImportController extends Controller
             'images' => $report['images'],
             'missing_images' => $report['missing_images'],
         ]);
-
-        if (! $dryRun && ($report['created'] > 0 || $report['updated'] > 0)) {
-            app(BuildDispatcher::class)->dispatch('wordpress.imported', [
-                'created' => $report['created'],
-                'updated' => $report['updated'],
-            ]);
-        }
 
         return back()
             ->with('success', $dryRun ? '事前確認が完了しました。データは変更していません。' : 'WordPressデータをインポートしました。')

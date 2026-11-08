@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\ContentController;
+use App\Http\Controllers\Api\SignedPreviewController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('throttle:api')->group(function () {
+    Route::get('/preview/{post}', SignedPreviewController::class)->middleware('signed')->name('api.preview');
     Route::get('/posts', [ContentController::class, 'posts']);
     Route::get('/posts/{slug}', [ContentController::class, 'post']);
     Route::get('/posts/{slug}/comments', [CommentController::class, 'postIndex']);

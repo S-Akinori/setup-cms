@@ -74,7 +74,7 @@ class WordPressImportWebTest extends TestCase
         $this->assertDatabaseHas('tags', ['slug' => 'wordpress']);
         $this->assertDatabaseHas('comments', ['author_name' => '山田太郎', 'status' => 'approved']);
         $this->assertDatabaseHas('comments', ['author_name' => '佐藤花子', 'status' => 'pending']);
-        $this->assertDatabaseHas('build_jobs', ['reason' => 'wordpress.imported']);
+        $this->assertDatabaseMissing('build_jobs', ['reason' => 'wordpress.imported']);
         $this->assertDatabaseHas('audit_logs', ['action' => 'wordpress_import.completed']);
         $this->assertSame([], Storage::disk('local')->allFiles('imports'));
     }

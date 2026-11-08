@@ -128,7 +128,7 @@ class ContentController extends Controller
             ->header('Cache-Control', $cacheControl);
     }
 
-    private function serialize(Post $post, bool $includeProtectedBody = false): array
+    public function serialize(Post $post, bool $includeProtectedBody = false): array
     {
         $passwordProtected = $post->isPasswordProtected();
 

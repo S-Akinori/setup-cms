@@ -571,7 +571,7 @@ export default defineConfig({
 
 詳しい取得例は[docs/astro-integration.md](docs/astro-integration.md)を参照してください。100件を超える場合はAPIのページネーションカーソルをたどります。
 
-### 記事更新時にGitHub Actionsで自動デプロイする
+### ヘッダーの更新ボタンでGitHub Actionsを開始する
 
 Astroリポジトリのデプロイワークフローへ、外部イベントの受信設定を追加します。
 
@@ -600,13 +600,43 @@ php artisan config:clear
 php artisan config:cache
 ```
 
-公開記事・固定ページの作成、更新、非公開化、削除、復元、カテゴリー変更、予約公開、WordPressインポートが行われると、CMSがGitHubのRepository Dispatch APIを呼び出します。GitHub ActionsはCMS APIから最新データを取得してAstroをビルドし、既存のXServerデプロイ処理を実行します。下書きだけの新規保存ではデプロイしません。
+記事・固定ページ・カテゴリーの編集やWordPressインポートでは、内容だけをCMSへ保存し、ビルドは開始しません。必要な変更をすべて保存したあと、管理画面ヘッダーの「ブログを更新」を押すと、CMSがGitHubのRepository Dispatch APIを1回呼び出します。GitHub ActionsはCMS APIから最新データを取得してAstroをビルドし、既存のXServerデプロイ処理を実行します。
+
+予約公開もCMS内の公開状態だけを変更します。公開サイトへ反映するには「ブログを更新」を押してください。連続クリックは1分に3回までに制限され、送信中はボタンが無効になります。
 
 GitHubがイベントを受理すると`build_jobs.status`は`running`になります。トークン・リポジトリ名の誤りやAPIエラーは`failed`として記録され、Laravelログにも出力されます。トークンをクライアントコード、Astroの公開環境変数、Gitリポジトリへ含めないでください。
 
 従来の任意Webhookを使用する場合は、`GITHUB_DEPLOY_*`をすべて空にしたうえで`FRONTEND_BUILD_WEBHOOK_URL`と`FRONTEND_BUILD_WEBHOOK_TOKEN`を使用できます。
 
 ## 日常運用
+
+### 記事をフロントサイトでプレビューする
+
+1. 管理メニューの「設定」を開く
+2. フロント側のプレビューページURL（例：`https://blog.example.com/preview`）を保存
+3. 保存済みの記事・固定ページの編集画面で「プレビュー」を押す
+
+CMSは設定URLへ次のクエリを追加して、新しいタブで開きます。
+
+| パラメータ | 内容 |
+| --- | --- |
+| `cms_preview_url` | 下書き本文を取得する署名付きAPI URL |
+| `slug` | 記事または固定ページのslug |
+| `type` | `post`または`page` |
+
+`cms_preview_url`は15分間だけ有効で、署名の変更や期限切れ時はHTTP 403になります。レスポンスは`Cache-Control: private, no-store`で返されるため、CDNやブラウザへ保存しないでください。フロント側プレビューページは、URLパラメータを取得して署名付きURLを`fetch`し、通常の記事ページと同じMarkdown変換・レイアウトで表示します。
+
+```js
+const params = new URLSearchParams(window.location.search);
+const contentUrl = params.get('cms_preview_url');
+if (!contentUrl) throw new Error('プレビューURLがありません。');
+
+const response = await fetch(contentUrl, { cache: 'no-store' });
+if (!response.ok) throw new Error('プレビューの有効期限が切れています。');
+const { data: article } = await response.json();
+```
+
+編集画面でまだ保存していない変更はプレビューへ含まれません。一度保存してからプレビューを開いてください。
 
 ### 記事作成
 

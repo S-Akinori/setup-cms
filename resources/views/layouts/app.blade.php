@@ -19,6 +19,14 @@
                 <a href="{{ route('admin.comments.index') }}">コメント</a>
                 <a href="{{ route('admin.media.index') }}">画像</a>
                 <a href="{{ route('admin.wordpress-import.create') }}">WordPress移行</a>
+                <a href="{{ route('admin.settings.edit') }}">設定</a>
+                <form action="{{ route('admin.build') }}" method="post" data-build-form>
+                    @csrf
+                    <button class="header-build-button" type="submit" data-build-button>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 0-2.1 5"/></svg>
+                        <span>ブログを更新</span>
+                    </button>
+                </form>
                 <form action="{{ route('logout') }}" method="post">@csrf<button class="link-button">ログアウト</button></form>
             </nav>
         </header>

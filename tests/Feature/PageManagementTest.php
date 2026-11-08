@@ -29,7 +29,7 @@ class PageManagementTest extends TestCase
         $response->assertRedirect(route('admin.pages.edit', $page));
         $this->assertSame('page', $page->content_type);
         $this->assertSame($category->id, $page->category_id);
-        $this->assertDatabaseHas('build_jobs', ['reason' => 'page.published']);
+        $this->assertDatabaseMissing('build_jobs', ['reason' => 'page.published']);
 
         $this->actingAs($admin)->put("/admin/pages/{$page->id}", [
             'title' => '私たちについて',
