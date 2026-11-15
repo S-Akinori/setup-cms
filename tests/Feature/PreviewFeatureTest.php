@@ -6,6 +6,7 @@ use App\Models\Post;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
@@ -112,5 +113,23 @@ class PreviewFeatureTest extends TestCase
         $this->actingAs($admin)->get(route('admin.preview', $post))
             ->assertRedirect(route('admin.settings.edit'))
             ->assertSessionHas('warning');
+    }
+
+    public function test_article_editor_remains_available_before_the_settings_migration_runs(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $post = Post::create([
+            'title' => '移行前の記事',
+            'slug' => 'before-settings-migration',
+            'body_markdown' => '本文',
+            'status' => 'draft',
+            'author_id' => $admin->id,
+        ]);
+
+        Schema::shouldReceive('hasTable')->once()->with('settings')->andReturnFalse();
+
+        $this->actingAs($admin)->get("/admin/posts/{$post->id}/edit")
+            ->assertOk()
+            ->assertSee('プレビューURLを設定');
     }
 }

@@ -20,6 +20,10 @@ class SettingsController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
+        if (! Setting::isAvailable()) {
+            return back()->with('warning', '設定テーブルがありません。サーバーで「php artisan migrate --force」を実行してください。');
+        }
+
         $data = $request->validate([
             'preview_url' => ['nullable', 'url:http,https', 'max:2048'],
         ]);

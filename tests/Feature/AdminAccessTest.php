@@ -105,4 +105,10 @@ class AdminAccessTest extends TestCase
 
         $this->assertAuthenticated();
     }
+
+    public function test_login_session_is_kept_for_one_week(): void
+    {
+        $this->assertSame(7 * 24 * 60, config('session.lifetime'));
+        $this->assertFalse(config('session.expire_on_close'));
+    }
 }
