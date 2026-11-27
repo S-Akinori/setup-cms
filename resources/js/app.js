@@ -1,4 +1,6 @@
 import './bootstrap';
+import { editorYoutube } from './editor-youtube';
+import { youtubeEmbedTitle, youtubeVideoId } from './youtube-embed.mjs';
 import { CrepeBuilder } from '@milkdown/crepe/builder';
 import { blockEdit } from '@milkdown/crepe/feature/block-edit';
 import { codeMirror } from '@milkdown/crepe/feature/code-mirror';
@@ -10,7 +12,7 @@ import { listItem } from '@milkdown/crepe/feature/list-item';
 import { placeholder } from '@milkdown/crepe/feature/placeholder';
 import { table } from '@milkdown/crepe/feature/table';
 import { toolbar } from '@milkdown/crepe/feature/toolbar';
-import { commandsCtx } from '@milkdown/kit/core';
+import { commandsCtx, editorViewCtx, parserCtx } from '@milkdown/kit/core';
 import { callCommand, insert, replaceAll } from '@milkdown/kit/utils';
 import {
     clearTextInCurrentBlockCommand,
@@ -68,6 +70,7 @@ const contentTemplates = {
     footnote: '本文に脚注を付けます[^1]\n\n[^1]: 脚注の内容を入力してください。',
 };
 const contentCommandIcons = {
+    youtube: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="m10 9 5 3-5 3z"></path></svg>',
     button: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M8 12h8"></path><path d="m14 10 2 2-2 2"></path></svg>',
     box: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M7 9h10"></path><path d="M7 13h7"></path></svg>',
     gallery: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9" r="1.5"></circle><path d="m5.5 17 4-4 3 3 2.5-2.5 3.5 3.5"></path></svg>',
@@ -79,7 +82,7 @@ const contentCommandIcons = {
     footnote: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h10"></path><path d="M10 5v14"></path><path d="M15 14h4l-4 5h4"></path></svg>',
 };
 
-const addContentSlashCommands = (builder) => {
+const addContentSlashCommands = (builder, insertYoutube) => {
     const group = builder.addGroup('cms-content', 'CMS');
     group
         .addItem('cms-button', {
@@ -97,6 +100,11 @@ const addContentSlashCommands = (builder) => {
                 ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
                 insert(contentTemplates.box)(ctx);
             },
+        })
+        .addItem('cms-youtube', {
+            label: 'YouTube',
+            icon: contentCommandIcons.youtube,
+            onRun: (ctx) => insertYoutube(ctx, true),
         })
         .addItem('cms-media-library', {
             label: '画像ギャラリー',
@@ -369,6 +377,26 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         }
     };
 
+    const insertYoutube = (ctx, fromSlash = false) => {
+        const url = window.prompt('YouTube動画のURLを入力してください。');
+        if (url === null) return;
+
+        const id = youtubeVideoId(url);
+        if (!id) {
+            setStatus('有効なYouTube動画のURLを入力してください。', 'error');
+            return;
+        }
+
+        if (fromSlash) ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+        const markdown = `[YouTube動画](https://www.youtube.com/watch?v=${id} "${youtubeEmbedTitle}")`;
+        const paragraph = ctx.get(parserCtx)(markdown)?.firstChild;
+        if (!paragraph) return;
+
+        const view = ctx.get(editorViewCtx);
+        view.dispatch(view.state.tr.replaceSelectionWith(paragraph, false).scrollIntoView());
+        setStatus('YouTube動画を本文へ挿入しました。', 'success');
+    };
+
     const initialMarkdown = toEditorMarkdown(markdownField.value);
     markdownField.value = toStorageMarkdown(initialMarkdown);
     const crepe = new CrepeBuilder({
@@ -391,7 +419,7 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
             inlineUploadPlaceholderText: '画像URLを入力、または画像を選択',
         })
         .addFeature(blockEdit, {
-            buildMenu: addContentSlashCommands,
+            buildMenu: (builder) => addContentSlashCommands(builder, insertYoutube),
         })
         .addFeature(toolbar)
         .addFeature(placeholder, {
@@ -401,6 +429,8 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         .addFeature(codeMirror)
         .addFeature(table)
         .addFeature(latex);
+
+    crepe.editor.use(editorYoutube);
 
     crepe.on((listener) => {
         listener.markdownUpdated((ctx, markdown) => {
@@ -534,10 +564,8 @@ if (markdownField && editorRoot && editorShell && uploadStatus && altDialog && a
         contentCommandButtons.forEach((button) => {
             button.addEventListener('mousedown', (event) => event.preventDefault());
             button.addEventListener('click', () => {
-                const template = contentTemplates[button.dataset.contentCommand];
-                if (!template) return;
-
-                crepe.editor.action(insert(template));
+                const command = button.dataset.contentCommand;
+                crepe.editor.action(command === 'youtube' ? insertYoutube : insert(contentTemplates[command]));
                 markdownField.value = toStorageMarkdown(crepe.getMarkdown());
                 proseMirror?.focus();
             });

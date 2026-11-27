@@ -681,6 +681,8 @@ echo 'Hello';
 
 数式は`$...$`または`$$...$$`、図は`mermaid`コードブロック、脚注は`[^1]`記法を使用します。APIは記法を変換せず`bodyMarkdown`へ返し、`markdownFlavor`は`qiita`です。公開サイト側で対応するMarkdownプラグインとスタイルを適用してください。
 
+編集ツールバーの「YouTube」または「/ → YouTube」から動画URLを入力すると、本文へ動画を挿入して編集画面で再生できます。公開サイトでの表示は [Astro連携ガイドのYouTube動画](docs/astro-integration.md#youtube動画) を参照してください。
+
 安全性を保つため、Qiitaで利用可能な任意の生HTML、`details`、埋め込みタグはこのCMSでは保存できません。本文にはMarkdown記法を使用してください。
 
 ### CMSボタン

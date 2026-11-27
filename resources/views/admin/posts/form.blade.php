@@ -26,6 +26,7 @@
                 <span class="toolbar-divider" aria-hidden="true"></span>
                 <button type="button" class="toolbar-button" data-content-command="button" title="リンクボタンを挿入" disabled>ボタン</button>
                 <button type="button" class="toolbar-button" data-content-command="box" title="Qiita Noteを挿入" disabled>Note</button>
+                <button type="button" class="toolbar-button" data-content-command="youtube" title="YouTube動画を埋め込む" disabled>YouTube</button>
                 <span class="toolbar-divider" aria-hidden="true"></span>
                 <button type="button" class="toolbar-button image-command" data-image-command title="画像ギャラリーから選択・アップロード" disabled>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4zM7 15l3.2-3.2 2.5 2.5 1.8-1.8L18 16M8.5 9a1.25 1.25 0 1 0 0 .01"/></svg>

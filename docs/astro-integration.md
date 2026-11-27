@@ -117,6 +117,38 @@ export default defineConfig({
 
 Qiita Note（`:::note`）、Mermaid、脚注、CMSボタンは、公開サイト側でも対応するremarkプラグインまたは独自変換を追加してください。安全性を保つため、CMSが禁止している生HTMLを有効化する`rehype-raw`は使用しないでください。
 
+### YouTube動画
+
+CMSの「YouTube」ボタンまたは「/ → YouTube」で挿入した動画は、APIの `bodyMarkdown` に次の形式で返ります。動画URLの開始位置や再生リストなどのパラメーターは保存時に取り除かれます。
+
+```markdown
+[YouTube動画](https://www.youtube.com/watch?v=M7lc1UVf-VE "cms-youtube")
+```
+
+公開サイトに [rehype-cms-youtube.mjs](../resources/js/rehype-cms-youtube.mjs) と [youtube-embed.mjs](../resources/js/youtube-embed.mjs) を同じディレクトリへコピーし、本文をHTMLに変換する処理のrehypeプラグインに登録してください。MarkdownファイルをAstroで変換する場合は、上記の `astro.config.mjs` に次を追加します。
+
+```js
+import rehypeCmsYoutube from './src/lib/rehype-cms-youtube.mjs';
+
+// 既存の markdown 設定内
+rehypePlugins: [rehypeKatex, rehypeCmsYoutube],
+```
+
+APIから取得した本文を独自のMarkdownパイプラインで変換する場合は、通常表示とプレビューの両方でそのパイプラインに登録してください。HTMLサニタイズを行う場合は、その後に登録します。プラグインは、段落全体を占める `cms-youtube` タイトル付きリンクから、有効なYouTube動画IDを持つ場合に限ってプレーヤーを生成します。プラグインを導入するまでは通常のリンクとして表示されます。
+
+```css
+iframe.cms-youtube {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 200px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+}
+```
+
+CSPでフレームの読み込み元を制限している場合は、既存の `frame-src` に `https://www.youtube-nocookie.com` を追加してください。[YouTubeの埋め込みヘルプ](https://support.google.com/youtube/answer/171780)
+
 ## GitHub Actionsによる自動更新
 
 Astroのデプロイワークフローで、CMSから送られるイベントを受信します。
